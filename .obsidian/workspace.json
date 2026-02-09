@@ -11,10 +11,12 @@
             "id": "dc6da34434647b0a",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "vscode-editor",
+              "state": {
+                "file": "BoardRush.project.json"
+              },
               "icon": "lucide-file",
-              "title": "新規タブ"
+              "title": "BoardRush.project"
             }
           }
         ]
@@ -90,6 +92,7 @@
             "state": {
               "type": "backlink",
               "state": {
+                "file": "無題のファイル.base",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -99,7 +102,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "バックリンク"
+              "title": "無題のファイルへのバックリンク"
             }
           },
           {
@@ -108,11 +111,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
+                "file": "無題のファイル.base",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "アウトゴーイングリンク"
+              "title": "無題のファイルからのアウトゴーイングリンク"
             }
           },
           {
@@ -150,12 +154,13 @@
             "state": {
               "type": "outline",
               "state": {
+                "file": "無題のファイル.base",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "アウトライン"
+              "title": "無題のファイルのアウトライン"
             }
           },
           {
@@ -188,6 +193,20 @@
       "vscode-editor:Create Code File": false
     }
   },
-  "active": "dc6da34434647b0a",
-  "lastOpenFiles": []
+  "active": "a5f4ddacf0dd5226",
+  "lastOpenFiles": [
+    "sourcemap.json",
+    "BoardRush.project.json",
+    "2026-02-02.md",
+    "無題のファイル.base",
+    "src/Players/Czdrjp/PlayerScripts/init.meta.json",
+    "src/Players/Czdrjp/Backpack/init.meta.json",
+    "src/Players/Czdrjp/PlayerScripts",
+    "src/Players/Czdrjp/init.meta.json",
+    "src/Players/Czdrjp/Backpack",
+    "src/Players/Czdrjp",
+    "src/StarterPlayer/StarterPlayerScripts/InputClient.client.lua",
+    "src/ServerScriptService/TrickService.server.lua",
+    "無題のファイル.canvas"
+  ]
 }

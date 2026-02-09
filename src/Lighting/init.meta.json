@@ -1,0 +1,21 @@
+{
+  "className": "Lighting",
+  "properties": {
+    "Ambient": [0.2745, 0.2745, 0.2745],
+    "Attributes": {
+      "RBX_LightingTechnologyUnifiedMigration": true,
+      "RBX_OriginalTechnologyOnFileLoad": 3
+    },
+    "Brightness": 3,
+    "EnvironmentDiffuseScale": 1,
+    "EnvironmentSpecularScale": 1,
+    "FogColor": [0.7529, 0.7529, 0.7529],
+    "GeographicLatitude": 0,
+    "GlobalShadows": true,
+    "OutdoorAmbient": [0.2745, 0.2745, 0.2745],
+    "Outlines": false,
+    "ShadowSoftness": 0.2,
+    "TimeOfDay": "14:30:00"
+  },
+  "keepUnknowns": true
+}
