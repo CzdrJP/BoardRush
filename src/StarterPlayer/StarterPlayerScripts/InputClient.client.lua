@@ -58,8 +58,8 @@ UserInputService.InputBegan:Connect(onInputBegan)
 ---------------------------------------------------------------------------
 TrickStarted.OnClientEvent:Connect(function(data)
     -- 将来: トリック開始演出（SE/VFX/カメラ等）
-    -- data.kind     = "Spin90" or "Spin180"
-    -- data.duration = 0.5 or 0.75
+    -- data.kind     = "Spin360" or "Spin720"
+    -- data.duration = 0.5
 end)
 
 TrickEnded.OnClientEvent:Connect(function(_data)

@@ -161,6 +161,11 @@ local function onPadTouched(pad: Part, hit: BasePart)
     local impulse = Vector3.new(0, launchSpeed * mass, 0)
     hrp:ApplyImpulse(impulse)
 
+    -- フリーズ対策: 空中開始時にサーバー所有へ（トリック時の切替を不要にする）
+    pcall(function()
+        hrp:SetNetworkOwner(nil)
+    end)
+
     -- Airborne状態セット
     if not playerState[player] then
         playerState[player] = { Airborne = false, TrickActive = false, LastRequestTime = 0 }

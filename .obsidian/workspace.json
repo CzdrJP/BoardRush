@@ -18,8 +18,21 @@
               "icon": "lucide-file",
               "title": "BoardRush.project"
             }
+          },
+          {
+            "id": "a81f5439595a2d0e",
+            "type": "leaf",
+            "state": {
+              "type": "release-notes",
+              "state": {
+                "currentVersion": "1.11.7"
+              },
+              "icon": "lucide-book-up",
+              "title": "Release Notes 1.11.7"
+            }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -193,7 +206,7 @@
       "vscode-editor:Create Code File": false
     }
   },
-  "active": "a5f4ddacf0dd5226",
+  "active": "a81f5439595a2d0e",
   "lastOpenFiles": [
     "sourcemap.json",
     "BoardRush.project.json",

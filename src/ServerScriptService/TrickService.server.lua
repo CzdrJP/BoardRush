@@ -11,6 +11,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 ---------------------------------------------------------------------------
 -- Remotes
@@ -24,15 +25,17 @@ local TrickEnded   = Remotes:WaitForChild("TrickEnded")
 -- 定数（TBD値は調整可能）
 ---------------------------------------------------------------------------
 local TRICK_DEFS = {
-    { kind = "Spin90",  angle = math.pi / 2, duration = 0.5  },
-    { kind = "Spin180", angle = math.pi,     duration = 0.75 },
+    { kind = "Spin360", angle = math.pi * 2, duration = 0.25 }, -- 360° / 0.25s
+    { kind = "Spin720", angle = math.pi * 4, duration = 0.25 }, -- 720° / 0.25s
 }
 
 local ROTATION_AXIS         = Vector3.new(0, 1, 0)  -- Y軸（定数化、後で切替可）
 local REQUEST_COOLDOWN      = 0.3                    -- TBD: レート制限(s)
-local GROUND_CHECK_INTERVAL = 0.05                   -- 接地チェック間隔(s)
+local GROUND_CHECK_INTERVAL = 0.02                   -- 接地チェック間隔(s)（0.25s回転に対応）
 local RESPAWN_DELAY         = 3                      -- TBD: バラバラ後リスポーン(s)
 local SCATTER_FORCE         = 30                     -- TBD: パーツ散らし力
+
+local USE_PHYSICS_DURING_TRICK = true  -- false で Physics 化を完全無効化（即戻せる）
 
 ---------------------------------------------------------------------------
 -- 共有状態テーブル参照
@@ -48,13 +51,46 @@ local playerState = _G.BoardRush_PlayerState
 ---------------------------------------------------------------------------
 local function getState(player: Player)
     if not playerState[player] then
-        playerState[player] = { Airborne = false, TrickActive = false, LastRequestTime = 0 }
+        playerState[player] = { Airborne = false, TrickActive = false, LastRequestTime = 0, PrevPlatformStand = nil }
     end
     return playerState[player]
 end
 
 ---------------------------------------------------------------------------
--- cleanupTrick: 全終了経路共通の復帰処理（修正D/E）
+-- Physics状態切替（USE_PHYSICS_DURING_TRICK で無効化可能）
+---------------------------------------------------------------------------
+local function applyTrickPhysics(state, humanoid)
+    if not USE_PHYSICS_DURING_TRICK then return end
+    if not state or not humanoid or not humanoid.Parent then return end
+
+    if state.PrevPlatformStand == nil then
+        state.PrevPlatformStand = humanoid.PlatformStand
+    end
+
+    humanoid.PlatformStand = true
+    humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+end
+
+local function restoreTrickPhysics(state, humanoid)
+    if not USE_PHYSICS_DURING_TRICK then return end
+    if not state then return end
+    if not humanoid or not humanoid.Parent then
+        state.PrevPlatformStand = nil
+        return
+    end
+
+    if state.PrevPlatformStand ~= nil then
+        humanoid.PlatformStand = state.PrevPlatformStand
+        state.PrevPlatformStand = nil
+    else
+        humanoid.PlatformStand = false
+    end
+
+    humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+end
+
+---------------------------------------------------------------------------
+-- cleanupTrick: 全終了経路共通の復帰処理
 ---------------------------------------------------------------------------
 local function cleanupTrick(player: Player, character: Model?, humanoid: Humanoid?, root: BasePart?)
     -- 回転停止
@@ -62,20 +98,24 @@ local function cleanupTrick(player: Player, character: Model?, humanoid: Humanoi
         root.AssemblyAngularVelocity = Vector3.zero
     end
 
-    -- 修正E: AutoRotate復帰
+    -- AutoRotate復帰
     if humanoid and humanoid.Parent then
         humanoid.AutoRotate = true
     end
 
-    -- 修正D: NetworkOwner復帰（プレイヤーに返す）
-    if root and root.Parent then
+    -- Physics状態復帰（フラグ制御）
+    local state = getState(player)
+    restoreTrickPhysics(state, humanoid)
+
+    -- NetworkOwner復帰: 着地済み（Airborne=false）の場合のみ戻す
+    -- 空中のままトリック終了した場合は着地時に戻す（フリーズ回避）
+    if root and root.Parent and (not state.Airborne) then
         pcall(function()
             root:SetNetworkOwner(player)
         end)
     end
 
     -- 状態リセット
-    local state = getState(player)
     state.TrickActive = false
 end
 
@@ -116,6 +156,8 @@ end
 
 ---------------------------------------------------------------------------
 -- トリック実行（コルーチン内で動作）
+-- 回転方式: 一定角速度で +方向に回し続け、指定角度分だけ回す
+-- CFrame補正なし / NetworkOwner切替はLaunchPad側で実施
 ---------------------------------------------------------------------------
 local function executeTrick(player: Player, trickDef)
     local character = player.Character
@@ -128,37 +170,60 @@ local function executeTrick(player: Player, trickDef)
     local state = getState(player)
     state.TrickActive = true
 
-    -- 修正D: サーバーに所有権を寄せる
-    pcall(function()
-        root:SetNetworkOwner(nil)
-    end)
+    -- NetworkOwner切替はLaunchPad打ち上げ時に実施済み（クリック時フリーズ回避）
 
-    -- 修正E: AutoRotate OFF
+    -- AutoRotate OFF
     humanoid.AutoRotate = false
 
-    -- 回転前のCFrame記録（補正用）
-    local startCFrame = root.CFrame
+    -- Physics状態適用（フラグ制御）
+    applyTrickPhysics(state, humanoid)
 
     -- TrickStarted通知
     TrickStarted:FireClient(player, {
-        kind     = trickDef.kind,
-        duration = trickDef.duration,
+        kind     = trickDef.kind,     -- "Spin360" or "Spin720"
+        duration = trickDef.duration, -- 0.25
     })
 
-    -- 角速度を付与
-    local angularSpeed = trickDef.angle / trickDef.duration
-    root.AssemblyAngularVelocity = ROTATION_AXIS * angularSpeed
+    -- 回転パラメータ（一定角速度で +方向回転を継続し、指定角度分だけ回す）
+    local A = trickDef.angle       -- 360°=2π / 720°=4π
+    local T = trickDef.duration    -- 0.25s
+    local omega = A / T            -- rad/s（一定）
+    local applied = 0              -- 回転積算量(rad)
 
-    -- 接地チェックループ（回転中）
     local elapsed = 0
     local gameOverTriggered = false
+    local heartbeatConn  -- Heartbeat接続
 
-    while elapsed < trickDef.duration do
+    -- Heartbeat: 一定角速度で +方向に回し続ける
+    heartbeatConn = RunService.Heartbeat:Connect(function(dt)
+        elapsed += dt
+
+        -- dtで回したぶんを積算（+方向のみ）
+        local step = omega * dt
+        applied += step
+
+        -- 回転を継続（+方向固定）
+        if root and root.Parent then
+            root.AssemblyAngularVelocity = ROTATION_AXIS * omega
+        end
+
+        -- 指定角度分回したら終了（または念のため時間でも終了）
+        if applied >= A or elapsed >= T then
+            if root and root.Parent then
+                root.AssemblyAngularVelocity = Vector3.zero
+            end
+            heartbeatConn:Disconnect()
+            return
+        end
+    end)
+
+    -- 接地チェックループ（回転中、別途task.waitで監視）
+    while elapsed < T do
         task.wait(GROUND_CHECK_INTERVAL)
-        elapsed += GROUND_CHECK_INTERVAL
 
         -- キャラクターが消えた場合
         if not character.Parent or not root.Parent or not humanoid.Parent then
+            if heartbeatConn.Connected then heartbeatConn:Disconnect() end
             cleanupTrick(player, character, humanoid, root)
             return
         end
@@ -166,8 +231,14 @@ local function executeTrick(player: Player, trickDef)
         -- 接地判定（サーバー正）
         if humanoid.FloorMaterial ~= Enum.Material.Air then
             gameOverTriggered = true
+            if heartbeatConn.Connected then heartbeatConn:Disconnect() end
             break
         end
+    end
+
+    -- 安全: Heartbeatがまだ接続中なら切断
+    if heartbeatConn.Connected then
+        heartbeatConn:Disconnect()
     end
 
     if gameOverTriggered then
@@ -176,17 +247,12 @@ local function executeTrick(player: Player, trickDef)
         return
     end
 
-    -- 正常終了: 回転完了
-    -- キャラクター存在チェック
+    -- 正常終了: CFrame補正なし（スナップ防止）
+    -- 角速度はHeartbeat内で既に0にされている
     if not character.Parent or not root.Parent then
         cleanupTrick(player, character, humanoid, root)
         return
     end
-
-    -- 回転停止 & CFrame補正（最終角度をスナップ）
-    root.AssemblyAngularVelocity = Vector3.zero
-    local targetRotation = CFrame.Angles(0, trickDef.angle, 0)
-    root.CFrame = CFrame.new(root.Position) * (startCFrame - startCFrame.Position) * targetRotation
 
     -- 復帰処理
     cleanupTrick(player, character, humanoid, root)
@@ -258,6 +324,13 @@ local function onCharacterAdded(player: Player, character: Model)
                 end
             else
                 s.Airborne = false
+                -- 着地時: NetworkOwnerをプレイヤーに復帰（フリーズ回避）
+                local root = character:FindFirstChild("HumanoidRootPart")
+                if root and root.Parent then
+                    pcall(function()
+                        root:SetNetworkOwner(player)
+                    end)
+                end
             end
         end
     end)
