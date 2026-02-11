@@ -1,0 +1,6 @@
+{
+  "className": "Decal",
+  "properties": {
+    "TextureContent": "rbxasset://textures/face.png"
+  }
+}

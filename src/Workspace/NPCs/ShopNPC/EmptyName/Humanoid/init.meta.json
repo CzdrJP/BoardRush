@@ -1,0 +1,8 @@
+{
+  "className": "Humanoid",
+  "properties": {
+    "MaxHealth": 0,
+    "NameOcclusion": "NoOcclusion",
+    "WalkSpeed": 0
+  }
+}

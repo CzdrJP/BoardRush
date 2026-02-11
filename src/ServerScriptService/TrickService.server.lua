@@ -36,6 +36,7 @@ local RESPAWN_DELAY         = 3                      -- TBD: バラバラ後リ�
 local SCATTER_FORCE         = 30                     -- TBD: パーツ散らし力
 
 local USE_PHYSICS_DURING_TRICK = true  -- false で Physics 化を完全無効化（即戻せる）
+local GROUND_RAY_LENGTH = 5  -- TBD: 接地判定の下方向Ray長さ(studs)
 
 ---------------------------------------------------------------------------
 -- 共有状態テーブル参照
@@ -45,6 +46,26 @@ if not _G.BoardRush_PlayerState then
 end
 
 local playerState = _G.BoardRush_PlayerState
+
+---------------------------------------------------------------------------
+-- ユーティリティ: Raycast接地判定
+---------------------------------------------------------------------------
+local function isGroundedRaycast(character, root)
+    if not character or not root or not root.Parent then
+        return false
+    end
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = { character }
+    params.IgnoreWater = true
+
+    local origin = root.Position
+    local direction = Vector3.new(0, -GROUND_RAY_LENGTH, 0)
+
+    local result = workspace:Raycast(origin, direction, params)
+    return result ~= nil
+end
 
 ---------------------------------------------------------------------------
 -- ユーティリティ: プレイヤー状態の安全取得
@@ -228,8 +249,8 @@ local function executeTrick(player: Player, trickDef)
             return
         end
 
-        -- 接地判定（サーバー正）
-        if humanoid.FloorMaterial ~= Enum.Material.Air then
+        -- 接地判定（Raycast方式: Physics/PlatformStand中でも確実に検知）
+        if isGroundedRaycast(character, root) then
             gameOverTriggered = true
             if heartbeatConn.Connected then heartbeatConn:Disconnect() end
             break
