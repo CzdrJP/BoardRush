@@ -206,19 +206,19 @@
       "vscode-editor:Create Code File": false
     }
   },
-  "active": "a81f5439595a2d0e",
+  "active": "6d618231833df674",
   "lastOpenFiles": [
-    "src/Workspace/ToolboxTemporaryInsertModel/init.meta.json",
-    "src/Workspace/ToolboxTemporaryInsertModel",
-    "src/Workspace/SparkleBoard/SkateboardPlatform/SpeedBoostGui/Bar/GunLabel/init.meta.json",
-    "src/Workspace/SparkleBoard/SkateboardPlatform/SpeedBoostGui/Bar/Fill/init.meta.json",
-    "src/Workspace/SparkleBoard/SkateboardPlatform/SpeedBoostGui/Bar/AmmoLabel/init.meta.json",
-    "src/Workspace/SparkleBoard/SkateboardPlatform/SpeedBoostGui/Bar/init.meta.json",
-    "src/Workspace/SparkleBoard/SkateboardPlatform/SpeedBoostGui/Bar/GunLabel",
-    "src/Workspace/SparkleBoard/SkateboardPlatform/SpeedBoostGui/Bar/Fill",
-    "src/Workspace/SparkleBoard/SkateboardPlatform/SpeedBoostGui/Bar/AmmoLabel",
-    "src/Workspace/SparkleBoard/SkateboardPlatform/SpeedBoostGui/init.meta.json",
-    "src/Workspace/SparkleBoard/SkateboardPlatform/SpeedBoostGui/Bar",
+    "src/StarterGui/ItemsGui/ItemsGuiController.client.lua",
+    "src/StarterGui/ItemsGui/init.meta.json",
+    "src/StarterGui/ItemsGui",
+    "src/ServerScriptService/EquipmentService.server.lua",
+    "src/ReplicatedStorage/Remotes/Equipment/RequestEquipSkateboard/init.meta.json",
+    "src/ReplicatedStorage/Shared/EquipmentConstants.lua",
+    "src/ReplicatedStorage/Remotes/Equipment/RequestEquipSkateboard",
+    "src/ReplicatedStorage/Remotes/Equipment",
+    "src/ReplicatedStorage/Shared",
+    "src/StarterGui/InventoryHUD/InventoryHUD.client.luau",
+    "src/StarterGui/InventoryHUD/init.meta.json",
     "2026-02-02.md",
     "無題のファイル.canvas"
   ]

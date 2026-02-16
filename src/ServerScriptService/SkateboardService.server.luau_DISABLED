@@ -1,0 +1,392 @@
+--[[
+    SkateboardService.server.lua
+    -----------------------------
+    スケボーの見た目適用（テンプレ切替版）
+
+    責務:
+    - EquipItem ハンドラ（InventoryService が状態管理、こちらは見た目のみ）
+    - 装備時: 個体の variant に応じたテンプレを Clone して装備
+    - 解除時: ボード除去＋ポーズ復帰
+    - リスポーン時の自動再装備
+
+    テンプレ配置:
+    - ReplicatedStorage/ItemAssets/Skateboards/Starter/ 内の Model
+    - ReplicatedStorage/ItemAssets/Skateboards/Shop/    内の Model
+    ※テンプレ不在時は warn して中断（モック生成しない）
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+---------------------------------------------------------------------------
+-- Remotes
+---------------------------------------------------------------------------
+local Remotes      = ReplicatedStorage:WaitForChild("Remotes")
+local EquipItem    = Remotes:WaitForChild("EquipItem")
+
+---------------------------------------------------------------------------
+-- テンプレ取得
+---------------------------------------------------------------------------
+local TEMPLATES_PATH -- 遅延初期化（起動順でフォルダがない場合に備える）
+
+local function ensureTemplatesPath()
+    if TEMPLATES_PATH then return TEMPLATES_PATH end
+    local assets = ReplicatedStorage:FindFirstChild("ItemAssets")
+    if not assets then
+        warn("[SkateboardService] ReplicatedStorage.ItemAssets not found")
+        return nil
+    end
+    local boards = assets:FindFirstChild("Skateboards")
+    if not boards then
+        warn("[SkateboardService] ItemAssets.Skateboards not found")
+        return nil
+    end
+    TEMPLATES_PATH = boards
+    return TEMPLATES_PATH
+end
+
+local function getTemplate(variant)
+    local path = ensureTemplatesPath()
+    if not path then return nil end
+
+    local folderName = (variant == "starter") and "Starter" or "Shop"
+    local folder = path:FindFirstChild(folderName)
+    if not folder then
+        warn("[SkateboardService] Template folder missing: " .. folderName)
+        return nil
+    end
+    -- Folder自体ではなく、中のModelを返す
+    local model = folder:FindFirstChildWhichIsA("Model")
+    if not model then
+        warn("[SkateboardService] No Model inside template folder: " .. folderName)
+        return nil
+    end
+    return model
+end
+
+---------------------------------------------------------------------------
+-- 設定定数
+---------------------------------------------------------------------------
+local EQUIPPED_MODEL_NAME  = "SkateboardEquipped"
+
+-- ボード配置オフセット
+local BOARD_OFFSET    = CFrame.new(0, -2.6, -0.1) * CFrame.Angles(0, math.rad(90), 0)
+local BOARD_OFFSET_R6 = CFrame.new(0, -3.0, -0.1) * CFrame.Angles(0, math.rad(90), 0)
+
+local SIDEWAYS_Y_DEG = 90
+
+---------------------------------------------------------------------------
+-- 内部状態（見た目管理用: SavedTransforms のみ）
+---------------------------------------------------------------------------
+local transformsByUserId = {}
+
+local function getTransforms(player)
+    local t = transformsByUserId[player.UserId]
+    if not t then
+        t = {}
+        transformsByUserId[player.UserId] = t
+    end
+    return t
+end
+
+local function getCharacterParts(player)
+    local character = player.Character
+    if not character then return nil end
+    local humanoid   = character:FindFirstChildOfClass("Humanoid")
+    local hrp        = character:FindFirstChild("HumanoidRootPart")
+    local lowerTorso = character:FindFirstChild("LowerTorso")
+    return character, humanoid, hrp, lowerTorso
+end
+
+---------------------------------------------------------------------------
+-- ユーティリティ
+---------------------------------------------------------------------------
+
+local function sanitizeClone(model)
+    for _, inst in ipairs(model:GetDescendants()) do
+        if inst:IsA("ProximityPrompt")
+            or inst:IsA("Script")
+            or inst:IsA("LocalScript")
+            or inst:IsA("ModuleScript") then
+            inst:Destroy()
+        end
+    end
+end
+
+local function configureBoardParts(model)
+    for _, inst in ipairs(model:GetDescendants()) do
+        if inst:IsA("BasePart") then
+            inst.Anchored    = false
+            inst.CanCollide  = false
+            inst.CanTouch    = false
+            inst.CanQuery    = false
+            inst.Massless    = true
+            inst.CastShadow  = false
+        end
+    end
+end
+
+---------------------------------------------------------------------------
+-- Motor6D Transform
+---------------------------------------------------------------------------
+
+local function findMotor(character, name)
+    local m = character:FindFirstChild(name, true)
+    if m and m:IsA("Motor6D") then
+        return m
+    end
+    return nil
+end
+
+local function saveAndApplyTransform(transforms, motor, transformCFrame)
+    if not motor then return end
+    if transforms[motor] == nil then
+        transforms[motor] = motor.Transform
+    end
+    motor.Transform = transformCFrame
+end
+
+local function restoreAllTransforms(transforms)
+    if not transforms then return end
+    for motor, original in pairs(transforms) do
+        if motor and motor.Parent then
+            motor.Transform = original
+        end
+    end
+    for k in pairs(transforms) do transforms[k] = nil end
+end
+
+---------------------------------------------------------------------------
+-- R15 ポーズ
+---------------------------------------------------------------------------
+local function setSidewaysPoseR15(transforms, character)
+    local rootJoint = findMotor(character, "RootJoint") or findMotor(character, "Root")
+    if rootJoint then
+        saveAndApplyTransform(transforms, rootJoint, CFrame.Angles(0, math.rad(SIDEWAYS_Y_DEG), 0))
+    end
+
+    local rightHip   = findMotor(character, "RightHip")
+    local leftHip    = findMotor(character, "LeftHip")
+    local rightKnee  = findMotor(character, "RightKnee")
+    local leftKnee   = findMotor(character, "LeftKnee")
+    local rightAnkle = findMotor(character, "RightAnkle")
+    local leftAnkle  = findMotor(character, "LeftAnkle")
+
+    if rightHip then
+        saveAndApplyTransform(transforms, rightHip, CFrame.Angles(math.rad(-10), math.rad(8), math.rad(10)))
+    end
+    if leftHip then
+        saveAndApplyTransform(transforms, leftHip, CFrame.Angles(math.rad(-10), math.rad(-8), math.rad(-10)))
+    end
+    if rightKnee then
+        saveAndApplyTransform(transforms, rightKnee, CFrame.Angles(math.rad(18), 0, 0))
+    end
+    if leftKnee then
+        saveAndApplyTransform(transforms, leftKnee, CFrame.Angles(math.rad(18), 0, 0))
+    end
+    if rightAnkle then
+        saveAndApplyTransform(transforms, rightAnkle, CFrame.Angles(math.rad(-8), 0, 0))
+    end
+    if leftAnkle then
+        saveAndApplyTransform(transforms, leftAnkle, CFrame.Angles(math.rad(-8), 0, 0))
+    end
+
+    local waist = findMotor(character, "Waist")
+    if waist then
+        saveAndApplyTransform(transforms, waist, CFrame.Angles(math.rad(-6), 0, 0))
+    end
+end
+
+local function setSidewaysPoseR6(transforms, character)
+    local rootJoint = findMotor(character, "RootJoint")
+    if rootJoint then
+        saveAndApplyTransform(transforms, rootJoint, CFrame.Angles(0, math.rad(SIDEWAYS_Y_DEG), 0))
+    end
+end
+
+---------------------------------------------------------------------------
+-- ボード溶接
+---------------------------------------------------------------------------
+local function attachBoard(boardModel, character, anchorPart, offset)
+    if not boardModel.PrimaryPart then
+        local pp = boardModel:FindFirstChildWhichIsA("BasePart", true)
+        if pp then boardModel.PrimaryPart = pp end
+    end
+    if not boardModel.PrimaryPart then return false end
+    if not anchorPart then return false end
+
+    boardModel.Name = EQUIPPED_MODEL_NAME
+    boardModel.Parent = character
+
+    boardModel:PivotTo(anchorPart.CFrame * offset)
+
+    local weld = Instance.new("WeldConstraint")
+    weld.Part0 = anchorPart
+    weld.Part1 = boardModel.PrimaryPart
+    weld.Parent = boardModel.PrimaryPart
+
+    return true
+end
+
+---------------------------------------------------------------------------
+-- 装備チェック・除去
+---------------------------------------------------------------------------
+local function isEquipped(character)
+    return character:FindFirstChild(EQUIPPED_MODEL_NAME) ~= nil
+end
+
+local function removeBoard(character)
+    local m = character:FindFirstChild(EQUIPPED_MODEL_NAME)
+    if m and m:IsA("Model") then
+        m:Destroy()
+    end
+end
+
+---------------------------------------------------------------------------
+-- 装備（variant に応じたテンプレを Clone）
+---------------------------------------------------------------------------
+local function equipSkateboard(player, variant)
+    local character, _, hrp, lowerTorso = getCharacterParts(player)
+    if not character then return false end
+
+    -- 旧ボードがあれば先に除去
+    removeBoard(character)
+
+    local src = getTemplate(variant)
+    if not src then
+        -- テンプレ不在 → モック生成しない
+        return false
+    end
+
+    local transforms = getTransforms(player)
+    -- 既存ポーズをリストア（切替時のため）
+    restoreAllTransforms(transforms)
+
+    local clone = src:Clone()
+    sanitizeClone(clone)
+    configureBoardParts(clone)
+
+    local ok
+    if lowerTorso then
+        ok = attachBoard(clone, character, lowerTorso, BOARD_OFFSET)
+        if ok then setSidewaysPoseR15(transforms, character) end
+    elseif hrp then
+        ok = attachBoard(clone, character, hrp, BOARD_OFFSET_R6)
+        if ok then setSidewaysPoseR6(transforms, character) end
+    end
+
+    if not ok then
+        clone:Destroy()
+        warn("[SkateboardService] Failed to attach board for " .. player.Name)
+        return false
+    end
+
+    return true
+end
+
+---------------------------------------------------------------------------
+-- 解除
+---------------------------------------------------------------------------
+local function unequipSkateboard(player)
+    local character = player.Character
+    if not character then return end
+
+    local transforms = getTransforms(player)
+    removeBoard(character)
+    restoreAllTransforms(transforms)
+end
+
+---------------------------------------------------------------------------
+-- EquipItem ハンドラ（見た目の適用/除去のみ）
+-- 状態管理（equippedItemId の更新）は InventoryService 側で行う
+-- InventoryService が notify → クライアント更新
+-- こちらは notify 後にキャラクターの見た目を変更する
+---------------------------------------------------------------------------
+EquipItem.OnServerEvent:Connect(function(player, instanceId, action)
+    if type(instanceId) ~= "string" then return end
+    if type(action) ~= "string" then return end
+
+    -- InventoryService の state を取得
+    local getStateFn = _G.InventoryGetState
+    if not getStateFn then
+        warn("[SkateboardService] InventoryService not ready")
+        return
+    end
+    local invState = getStateFn(player)
+    if not invState then return end
+
+    -- 個体情報を取得
+    local findItemFn = _G.InventoryFindItem
+    if not findItemFn then return end
+    local item = findItemFn(player, instanceId)
+    if not item then
+        warn("[SkateboardService] Item not found:", instanceId)
+        return
+    end
+
+    -- ★注意: InventoryService の EquipItem ハンドラが先に状態を更新し notify する
+    -- ここでは「更新後の equippedItemId」に基づいて見た目を適用する
+    -- → task.defer で少し遅らせて、InventoryService の処理完了を待つ
+    task.defer(function()
+        local currentState = getStateFn(player)
+        if not currentState then return end
+
+        if currentState.equippedItemId then
+            -- 何かが装備されている → その個体の variant で見た目適用
+            local equippedItem = findItemFn(player, currentState.equippedItemId)
+            if equippedItem then
+                equipSkateboard(player, equippedItem.variant)
+            end
+        else
+            -- 何も装備されていない → 解除
+            unequipSkateboard(player)
+        end
+    end)
+end)
+
+---------------------------------------------------------------------------
+-- リスポーン: 装備中の個体を自動再装備
+---------------------------------------------------------------------------
+local function onCharacterAdded(player)
+    task.defer(function()
+        local transforms = getTransforms(player)
+        for k in pairs(transforms) do transforms[k] = nil end
+
+        local getStateFn = _G.InventoryGetState
+        if not getStateFn then return end
+        local invState = getStateFn(player)
+        if not invState or not invState.equippedItemId then return end
+
+        local findItemFn = _G.InventoryFindItem
+        if not findItemFn then return end
+        local item = findItemFn(player, invState.equippedItemId)
+        if not item then return end
+
+        task.wait(0.1)
+        if player.Character and player.Character.Parent then
+            equipSkateboard(player, item.variant)
+        end
+    end)
+end
+
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function()
+        onCharacterAdded(player)
+    end)
+end)
+
+-- 既にいるプレイヤー対応（Studioテスト用）
+for _, player in ipairs(Players:GetPlayers()) do
+    player.CharacterAdded:Connect(function()
+        onCharacterAdded(player)
+    end)
+    if player.Character then
+        onCharacterAdded(player)
+    end
+end
+
+Players.PlayerRemoving:Connect(function(player)
+    transformsByUserId[player.UserId] = nil
+end)
+
+print("[SkateboardService] Initialized (template-based equip)")
