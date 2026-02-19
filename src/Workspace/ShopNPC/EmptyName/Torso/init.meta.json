@@ -1,0 +1,23 @@
+{
+  "className": "Part",
+  "properties": {
+    "Anchored": true,
+    "BackSurface": "Weld",
+    "BottomSurface": "Weld",
+    "CFrame": [0.0005, 6.8559, -12, 1.0, 0, 0, 0, 1.0, 0, 0, 0, 1.0],
+    "Color": [13, 105, 172],
+    "CustomPhysicalProperties": {
+      "density": 0.7,
+      "friction": 0.0,
+      "elasticity": 0.5,
+      "frictionWeight": 1.0,
+      "elasticityWeight": 1.0,
+      "acousticAbsorption": 1.0
+    },
+    "FormFactor": "Symmetric",
+    "LeftSurface": "Weld",
+    "RightSurface": "Weld",
+    "Size": [2, 2, 1],
+    "TopSurface": "Weld"
+  }
+}
