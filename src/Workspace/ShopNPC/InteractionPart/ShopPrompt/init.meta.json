@@ -1,0 +1,9 @@
+{
+  "className": "ProximityPrompt",
+  "properties": {
+    "ActionText": "ショップ",
+    "MaxActivationDistance": 20,
+    "ObjectText": "店員",
+    "RequiresLineOfSight": false
+  }
+}

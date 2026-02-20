@@ -318,6 +318,7 @@ local function executeTrick(player: Player, trickDef)
     if player:GetAttribute(EquipmentConstants.ATTR_IS_EQUIPPED) then
         boardMul = BOARD_MULTIPLIERS.equipped
     end
+    
     local earned = math.floor(BASE_SCORE * (trickDef.scoreMultiplier or 1) * boardMul)
     if earned > 0 then
         local current = player:GetAttribute("TrickScore") or 0

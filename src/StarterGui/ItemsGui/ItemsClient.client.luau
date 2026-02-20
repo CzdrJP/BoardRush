@@ -192,32 +192,42 @@ closeButton.MouseButton1Click:Connect(function()
 end)
 
 -- アイテムリスト描画（複数ボード対応）
+-- アイテムリスト描画（複数ボード対応）
 local boardButtons = {} -- { [boardId] = { frame, button } }
--- アイテム欄での購入機能は削除（ショップUI分離のため）
+-- アイテム欄での購入機能は削除（ショップUI移行のため）
 
 if EquipmentConstants and EquipmentConstants.BOARD_LIST then
 	for _, boardInfo in ipairs(EquipmentConstants.BOARD_LIST) do
 		local displayName = boardInfo.displayName
-		-- 価格表示は維持するが、ここでは購入不可
-		
-		local itemFrame, actionBtn = createItemEntry(boardInfo.id, displayName)
-		boardButtons[boardInfo.id] = { frame = itemFrame, button = actionBtn, info = boardInfo }
+		-- 価格表示削除
 		
 		-- 各ボタンのクリックイベント
-		actionBtn.MouseButton1Click:Connect(function()
-			local isUnlocked = player:GetAttribute(EquipmentConstants.ATTR_UNLOCKED_PREFIX .. boardInfo.id)
-			-- Purchase処理は削除
+		-- 所持チェック（念のため）
+		local isUnlocked = player:GetAttribute(EquipmentConstants.ATTR_UNLOCKED_PREFIX .. boardInfo.id)
+		
+		if isUnlocked then
+			local itemFrame, actionBtn = createItemEntry(boardInfo.id, displayName)
+			boardButtons[boardInfo.id] = { frame = itemFrame, button = actionBtn, info = boardInfo }
 			
-			if isUnlocked then
-				-- 装備/解除
+			actionBtn.MouseButton1Click:Connect(function()
 				if RequestEquipEvent then
 					RequestEquipEvent:FireServer(boardInfo.id)
 				end
-			end
-		end)
+			end)
+		end
 	end
 else
-	-- フォールバック: 旧形式(略)
+	-- フォールバック: 旧形式
+	local skateboardId = "Skateboard"
+	if EquipmentConstants then
+		skateboardId = EquipmentConstants.DEFAULT_BOARD_NAME or "Skateboard"
+	end
+	local _, actionBtn = createItemEntry(skateboardId, skateboardId)
+	actionBtn.MouseButton1Click:Connect(function()
+		if RequestEquipEvent then
+			RequestEquipEvent:FireServer(skateboardId)
+		end
+	end)
 end
 
 -- ボタン状態の更新
@@ -225,30 +235,23 @@ local function updateButtonState()
 	if not EquipmentConstants then return end
 	
 	local equippedId = player:GetAttribute(EquipmentConstants.ATTR_EQUIPPED_ID)
-	-- money監視は不要になったが、UI更新トリガーとしては残る
+
+	-- リスト自体を作り直す必要があるため、状態更新だけでなくリスト更新を呼ぶべきだが
+	-- ここでは既存ボタンの状態更新のみ行う。
+	-- 新規アンロック時は refreshList() が呼ばれる必要がある（後述のAttributeChangedで対応）
 
 	for boardId, entry in pairs(boardButtons) do
-		local isUnlocked = player:GetAttribute(EquipmentConstants.ATTR_UNLOCKED_PREFIX .. boardId)
-		
-		if isUnlocked then
-			-- アンロック済み
-			if equippedId == boardId then
-				entry.button.Text = "解除する"
-				entry.button.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- 赤
-			else
-				entry.button.Text = "装備する"
-				entry.button.BackgroundColor3 = Color3.fromRGB(0, 180, 0)   -- 緑
-			end
-			entry.button.AutoButtonColor = true
-			entry.button.Active = true
-			entry.button.Transparency = 0
+		-- 表示されている＝所持済みのはず
+		if equippedId == boardId then
+			entry.button.Text = "解除する"
+			entry.button.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- 赤
 		else
-			-- 未ロック（ロック中）
-			entry.button.Text = "ロック中"
-			entry.button.BackgroundColor3 = Color3.fromRGB(100, 100, 100) -- グレー
-			entry.button.AutoButtonColor = false
-			entry.button.Active = false
+			entry.button.Text = "装備する"
+			entry.button.BackgroundColor3 = Color3.fromRGB(0, 180, 0)   -- 緑
 		end
+		entry.button.AutoButtonColor = true
+		entry.button.Active = true
+		entry.button.Transparency = 0
 	end
 end
 
@@ -259,9 +262,33 @@ updateButtonState()
 player.AttributeChanged:Connect(function(attributeName)
 	if EquipmentConstants and (
 		attributeName == EquipmentConstants.ATTR_IS_EQUIPPED or 
-		attributeName == EquipmentConstants.ATTR_EQUIPPED_ID or
-		string.find(attributeName, EquipmentConstants.ATTR_UNLOCKED_PREFIX)
+		attributeName == EquipmentConstants.ATTR_EQUIPPED_ID
 	) then
+		updateButtonState()
+	elseif EquipmentConstants and string.find(attributeName, EquipmentConstants.ATTR_UNLOCKED_PREFIX) then
+		-- アンロック状態が変わったらリストを再構築（未所持->所持で表示させるため）
+		-- refreshList() はローカル関数として定義されていないため、中身をここまたは関数化して呼ぶ必要がある
+		-- 現状のコード構造では refreshList がないため、リロードが必要。
+		-- 簡易リロード:
+		
+		-- リスト再描画ロジック（簡易版）
+		-- 既存削除
+		for _, child in ipairs(container:GetChildren()) do
+			if child:IsA("Frame") then child:Destroy() end
+		end
+		boardButtons = {}
+		
+		-- 再生成
+		for _, boardInfo in ipairs(EquipmentConstants.BOARD_LIST) do
+			local isUnlocked = player:GetAttribute(EquipmentConstants.ATTR_UNLOCKED_PREFIX .. boardInfo.id)
+			if isUnlocked then
+				local itemFrame, actionBtn = createItemEntry(boardInfo.id, boardInfo.displayName)
+				boardButtons[boardInfo.id] = { frame = itemFrame, button = actionBtn, info = boardInfo }
+				actionBtn.MouseButton1Click:Connect(function()
+					if RequestEquipEvent then RequestEquipEvent:FireServer(boardInfo.id) end
+				end)
+			end
+		end
 		updateButtonState()
 	end
 end)

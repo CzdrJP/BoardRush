@@ -2,7 +2,7 @@
   "className": "UnionOperation",
   "properties": {
     "Anchored": true,
-    "CFrame": [-3.1638, 13.6985, -15.75, 1, 0, 0, 0, 1.0, 0, 0, 0, 1.0],
+    "CFrame": [30.8362, 10.6985, 29.25, 1, 0, 0, 0, 1.0, 0, 0, 0, 1.0],
     "Color": [17, 17, 17],
     "Material": "SmoothPlastic",
     "RenderFidelity": "Precise",

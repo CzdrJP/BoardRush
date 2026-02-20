@@ -4,7 +4,7 @@
     "Anchored": true,
     "BackSurface": "SmoothNoOutlines",
     "BottomSurface": "SmoothNoOutlines",
-    "CFrame": [4.7505, 6.45, -14.8, -0.866, 0, -0.5, 0, 1.0, 0, 0.5, 0, -0.866],
+    "CFrame": [38.7505, 3.45, 30.2, -0.866, 0, -0.5, 0, 1.0, 0, 0.5, 0, -0.866],
     "Color": [91, 93, 105],
     "FormFactor": "Custom",
     "FrontSurface": "SmoothNoOutlines",

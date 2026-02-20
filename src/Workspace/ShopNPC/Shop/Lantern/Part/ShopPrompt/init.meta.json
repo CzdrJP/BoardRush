@@ -1,8 +1,0 @@
-{
-  "className": "ProximityPrompt",
-  "properties": {
-    "ActionText": "ショップを開く",
-    "HoldDuration": 0.5,
-    "ObjectText": "ショップ店員"
-  }
-}
