@@ -15,5 +15,8 @@ return {
 	BOARD_LIST = {
 		{ id = "Skateboard",  displayName = "Skateboard",  templateName = "SkateboardTemplate",  price = 0, scoreMultiplier = 1.0 },
 		{ id = "Skateboard2", displayName = "Skateboard2", templateName = "SkateboardTemplate2", price = 100, scoreMultiplier = 1.2 },
+		{ id = "Skateboard_Green", displayName = "Skateboard (Green)", templateName = "SkateboardTemplate_Green", price = 300, scoreMultiplier = 1.5 },
+		{ id = "Skateboard_Blue", displayName = "Skateboard (Blue)", templateName = "SkateboardTemplate_Blue", price = 500, scoreMultiplier = 1.8 },
+		{ id = "Skateboard_Yellow", displayName = "Skateboard (Yellow)", templateName = "SkateboardTemplate_Yellow", price = 1000, scoreMultiplier = 2.5 },
 	},
 }

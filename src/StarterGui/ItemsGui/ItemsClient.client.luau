@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -62,152 +63,238 @@ if Remotes and EquipmentConstants then
 end
 
 -- -------------------------------------------------------------------------
--- UI構築 (ファイル同期トラブル回避のためコードで生成)
+-- UI構築 (Pop & Dynamic Design)
 -- -------------------------------------------------------------------------
 local ScreenGui = script.Parent
 
--- UI要素を生成
+-- 既存UIがあれば削除（ホットリロード時の重複防止）
+if ScreenGui:FindFirstChild("MainFrame") then ScreenGui.MainFrame:Destroy() end
+if ScreenGui:FindFirstChild("OpenButton") then ScreenGui.OpenButton:Destroy() end
 
--- 「アイテム」ボタン
+local function addHoverAnimation(guiObject, scaleTarget)
+	scaleTarget = scaleTarget or 1.05
+	local originalSize = guiObject.Size
+	
+	guiObject.MouseEnter:Connect(function()
+		TweenService:Create(guiObject, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Size = UDim2.new(originalSize.X.Scale, originalSize.X.Offset * scaleTarget, originalSize.Y.Scale, originalSize.Y.Offset * scaleTarget)
+		}):Play()
+	end)
+	
+	guiObject.MouseLeave:Connect(function()
+		TweenService:Create(guiObject, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = originalSize
+		}):Play()
+	end)
+end
+
+-- 「アイテム」ボタン（画面右下）
 local openButton = Instance.new("TextButton")
 openButton.Name = "OpenButton"
-openButton.Size = UDim2.new(0, 120, 0, 40)
-openButton.Position = UDim2.new(1, -140, 0.9, -10) -- 右下
-openButton.AnchorPoint = Vector2.new(0, 0)
-openButton.BackgroundColor3 = Color3.fromRGB(50, 150, 255)
-openButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-openButton.Font = Enum.Font.GothamBold
-openButton.TextSize = 18
-openButton.Text = "アイテム"
+openButton.Size = UDim2.new(0, 140, 0, 50)
+openButton.Position = UDim2.new(1, -160, 0.9, -30)
+openButton.AnchorPoint = Vector2.new(0.5, 0.5)
+openButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+openButton.TextColor3 = Color3.fromRGB(50, 150, 255)
+openButton.Font = Enum.Font.GothamBlack
+openButton.TextSize = 20
+openButton.Text = "👜 ITEMS"
+openButton.AutoButtonColor = false
 openButton.Parent = ScreenGui
 
--- メインフレーム
-local mainFrame = Instance.new("Frame")
+local openCorner = Instance.new("UICorner", openButton)
+openCorner.CornerRadius = UDim.new(0, 8)
+
+local openStroke = Instance.new("UIStroke", openButton)
+openStroke.Color = Color3.fromRGB(200, 220, 255)
+openStroke.Thickness = 3
+openStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+addHoverAnimation(openButton, 1.08)
+
+-- メインフレーム (丸みを帯びたポップなウィンドウ)
+local mainFrame = Instance.new("CanvasGroup")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 300, 0, 400)
+mainFrame.Size = UDim2.new(0, 540, 0, 420) -- 横幅を540に拡張 (110*4 + 15*3 + マージン)
 mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+mainFrame.BackgroundColor3 = Color3.fromRGB(250, 250, 255)
 mainFrame.BorderSizePixel = 0
 mainFrame.Visible = false
+mainFrame.GroupTransparency = 1 
 mainFrame.Parent = ScreenGui
+
+local uiScale = Instance.new("UIScale", mainFrame)
+uiScale.Scale = 0
+
+local mainCorner = Instance.new("UICorner", mainFrame)
+mainCorner.CornerRadius = UDim.new(0, 8)
+
+local mainStroke = Instance.new("UIStroke", mainFrame)
+mainStroke.Color = Color3.fromRGB(220, 220, 240)
+mainStroke.Thickness = 4
 
 local titleLabel = Instance.new("TextLabel")
 titleLabel.Name = "TitleLabel"
-titleLabel.Size = UDim2.new(1, 0, 0, 40)
-titleLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.TextSize = 20
-titleLabel.Text = "アイテム"
+titleLabel.Size = UDim2.new(1, -100, 0, 60)
+titleLabel.Position = UDim2.new(0, 25, 0, 5)
+titleLabel.BackgroundTransparency = 1
+titleLabel.TextColor3 = Color3.fromRGB(60, 60, 80)
+titleLabel.Font = Enum.Font.GothamBlack
+titleLabel.TextSize = 26
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Text = "Your Items"
 titleLabel.Parent = mainFrame
 
 local closeButton = Instance.new("TextButton")
 closeButton.Name = "CloseButton"
 closeButton.Size = UDim2.new(0, 40, 0, 40)
-closeButton.Position = UDim2.new(1, -40, 0, 0)
-closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeButton.Position = UDim2.new(1, -30, 0, 15)
+closeButton.AnchorPoint = Vector2.new(0.5, 0)
+closeButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
 closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeButton.Font = Enum.Font.GothamBold
-closeButton.TextSize = 18
+closeButton.Font = Enum.Font.GothamBlack
+closeButton.TextSize = 20
 closeButton.Text = "X"
+closeButton.AutoButtonColor = false
 closeButton.Parent = mainFrame
+local closeCorner = Instance.new("UICorner", closeButton)
+closeCorner.CornerRadius = UDim.new(0, 6)
+addHoverAnimation(closeButton, 1.15)
 
 local container = Instance.new("ScrollingFrame")
 container.Name = "Container"
-container.Size = UDim2.new(1, -20, 1, -60)
-container.Position = UDim2.new(0, 10, 0, 50)
+container.Size = UDim2.new(1, -30, 1, -80)
+container.Position = UDim2.new(0, 15, 0, 65)
 container.BackgroundTransparency = 1
-container.CanvasSize = UDim2.new(0, 0, 0, 0) -- レイアウトにより自動調整
+container.CanvasSize = UDim2.new(0, 0, 0, 0)
 container.AutomaticCanvasSize = Enum.AutomaticSize.Y
-container.ScrollBarThickness = 6
+container.ScrollBarThickness = 8
+container.ScrollBarImageColor3 = Color3.fromRGB(200, 200, 220)
 container.Parent = mainFrame
 
-local uiList = Instance.new("UIListLayout")
-uiList.Parent = container
-uiList.SortOrder = Enum.SortOrder.LayoutOrder
-uiList.Padding = UDim.new(0, 5)
+local uiLayout = Instance.new("UIGridLayout")
+uiLayout.Parent = container
+uiLayout.SortOrder = Enum.SortOrder.LayoutOrder
+uiLayout.CellPadding = UDim2.new(0, 15, 0, 15)
+uiLayout.CellSize = UDim2.new(0, 110, 0, 145)
+uiLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
--- アイテムテンプレート生成関数
 local function createItemEntry(itemId, itemName)
-	local frame = Instance.new("Frame")
-	frame.Name = itemId
-	frame.Size = UDim2.new(1, 0, 0, 60)
-	frame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-	frame.Parent = container
-
-	local icon = Instance.new("ImageLabel")
-	icon.Name = "Icon"
-	icon.Size = UDim2.new(0, 50, 0, 50)
-	icon.Position = UDim2.new(0, 5, 0.5, 0)
-	icon.AnchorPoint = Vector2.new(0, 0.5)
-	icon.BackgroundColor3 = Color3.fromRGB(80, 80, 80) -- 仮の背景色
-	icon.Image = "" -- 仮画像（プレースホルダー）
-	icon.Parent = frame
-
-	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Name = "NameLabel"
-	nameLabel.Size = UDim2.new(0, 120, 1, 0)
-	nameLabel.Position = UDim2.new(0, 65, 0, 0)
-	nameLabel.BackgroundTransparency = 1
-	nameLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
-	nameLabel.Font = Enum.Font.GothamMedium
-	nameLabel.TextSize = 16
-	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-	nameLabel.Text = itemName
-	nameLabel.Parent = frame
+	local containerFrame = Instance.new("Frame")
+	containerFrame.Name = itemId
+	containerFrame.BackgroundTransparency = 1
+	containerFrame.Parent = container
 
 	local actionButton = Instance.new("TextButton")
 	actionButton.Name = "ActionButton"
-	actionButton.Size = UDim2.new(0, 80, 0, 36)
-	actionButton.Position = UDim2.new(1, -90, 0.5, 0)
-	actionButton.AnchorPoint = Vector2.new(0, 0.5)
-	actionButton.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
-	actionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	actionButton.Font = Enum.Font.GothamBold
-	actionButton.TextSize = 14
-	actionButton.Text = "装備する"
-	actionButton.AutoButtonColor = true
-	actionButton.Parent = frame
-	
-	-- 角丸
-	local uiCorner = Instance.new("UICorner")
-	uiCorner.CornerRadius = UDim.new(0, 4)
-	uiCorner.Parent = actionButton
+	actionButton.Size = UDim2.new(1, 0, 0, 110)
+	actionButton.BackgroundColor3 = Color3.fromRGB(245, 245, 255)
+	actionButton.Text = ""
+	actionButton.AutoButtonColor = false
+	actionButton.Parent = containerFrame
 
-	return frame, actionButton
+	local corner = Instance.new("UICorner", actionButton)
+	corner.CornerRadius = UDim.new(0, 12)
+	
+	local stroke = Instance.new("UIStroke", actionButton)
+	stroke.Color = Color3.fromRGB(220, 220, 235)
+	stroke.Thickness = 3
+	
+	local emoji = Instance.new("TextLabel", actionButton)
+	emoji.Size = UDim2.new(1, 0, 1, 0)
+	emoji.BackgroundTransparency = 1
+	emoji.Text = "🛹"
+	emoji.TextSize = 56
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "NameLabel"
+	nameLabel.Size = UDim2.new(1, 0, 0, 25)
+	nameLabel.Position = UDim2.new(0, 0, 0, 120)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.TextColor3 = Color3.fromRGB(80, 80, 100)
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextSize = 14
+	nameLabel.TextWrapped = true
+	nameLabel.TextScaled = true
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Center
+	nameLabel.Text = itemName
+	nameLabel.Parent = containerFrame
+
+	local equipBadge = Instance.new("Frame")
+	equipBadge.Name = "EquipBadge"
+	equipBadge.Size = UDim2.new(1, -20, 0, 24)
+	equipBadge.AnchorPoint = Vector2.new(0.5, 1)
+	equipBadge.Position = UDim2.new(0.5, 0, 1, -10)
+	equipBadge.BackgroundColor3 = Color3.fromRGB(50, 220, 100)
+	equipBadge.Visible = false
+	equipBadge.Parent = actionButton
+	
+	local badgeCorner = Instance.new("UICorner", equipBadge)
+	badgeCorner.CornerRadius = UDim.new(0, 8)
+	
+	local badgeText = Instance.new("TextLabel", equipBadge)
+	badgeText.Size = UDim2.new(1, 0, 1, 0)
+	badgeText.BackgroundTransparency = 1
+	badgeText.TextColor3 = Color3.fromRGB(255, 255, 255)
+	badgeText.Font = Enum.Font.GothamBlack
+	badgeText.TextSize = 12
+	badgeText.Text = "EQUIPPED"
+
+	addHoverAnimation(actionButton, 1.05)
+
+	return containerFrame, actionButton, stroke, equipBadge
 end
 
 -- -------------------------------------------------------------------------
 -- UI ロジック
 -- -------------------------------------------------------------------------
 
--- 開閉処理
-openButton.MouseButton1Click:Connect(function()
-	mainFrame.Visible = not mainFrame.Visible
-end)
+local isOpen = false
 
-closeButton.MouseButton1Click:Connect(function()
-	mainFrame.Visible = false
-end)
+local function toggleUI()
+	isOpen = not isOpen
+	if isOpen then
+		mainFrame.Visible = true
+		mainFrame.Position = openButton.Position
+		uiScale.Scale = 0
+		
+		TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			GroupTransparency = 0
+		}):Play()
+		TweenService:Create(uiScale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Scale = 1
+		}):Play()
+	else
+		local closeTween = TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			Position = openButton.Position,
+			GroupTransparency = 1
+		})
+		local scaleTween = TweenService:Create(uiScale, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			Scale = 0
+		})
+		closeTween:Play()
+		scaleTween:Play()
+		closeTween.Completed:Connect(function()
+			if not isOpen then mainFrame.Visible = false end
+		end)
+	end
+end
 
--- アイテムリスト描画（複数ボード対応）
--- アイテムリスト描画（複数ボード対応）
-local boardButtons = {} -- { [boardId] = { frame, button } }
--- アイテム欄での購入機能は削除（ショップUI移行のため）
+openButton.MouseButton1Click:Connect(toggleUI)
+closeButton.MouseButton1Click:Connect(toggleUI)
+
+local boardButtons = {}
 
 if EquipmentConstants and EquipmentConstants.BOARD_LIST then
 	for _, boardInfo in ipairs(EquipmentConstants.BOARD_LIST) do
 		local displayName = boardInfo.displayName
-		-- 価格表示削除
-		
-		-- 各ボタンのクリックイベント
-		-- 所持チェック（念のため）
 		local isUnlocked = player:GetAttribute(EquipmentConstants.ATTR_UNLOCKED_PREFIX .. boardInfo.id)
 		
 		if isUnlocked then
-			local itemFrame, actionBtn = createItemEntry(boardInfo.id, displayName)
-			boardButtons[boardInfo.id] = { frame = itemFrame, button = actionBtn, info = boardInfo }
+			local itemFrame, actionBtn, stroke, badge = createItemEntry(boardInfo.id, displayName)
+			boardButtons[boardInfo.id] = { frame = itemFrame, button = actionBtn, stroke = stroke, badge = badge, info = boardInfo }
 			
 			actionBtn.MouseButton1Click:Connect(function()
 				if RequestEquipEvent then
@@ -217,41 +304,32 @@ if EquipmentConstants and EquipmentConstants.BOARD_LIST then
 		end
 	end
 else
-	-- フォールバック: 旧形式
 	local skateboardId = "Skateboard"
 	if EquipmentConstants then
 		skateboardId = EquipmentConstants.DEFAULT_BOARD_NAME or "Skateboard"
 	end
-	local _, actionBtn = createItemEntry(skateboardId, skateboardId)
+	local _, actionBtn, stroke, badge = createItemEntry(skateboardId, skateboardId)
+	boardButtons[skateboardId] = { button = actionBtn, stroke = stroke, badge = badge }
 	actionBtn.MouseButton1Click:Connect(function()
-		if RequestEquipEvent then
-			RequestEquipEvent:FireServer(skateboardId)
-		end
+		if RequestEquipEvent then RequestEquipEvent:FireServer(skateboardId) end
 	end)
 end
 
 -- ボタン状態の更新
 local function updateButtonState()
 	if not EquipmentConstants then return end
-	
 	local equippedId = player:GetAttribute(EquipmentConstants.ATTR_EQUIPPED_ID)
 
-	-- リスト自体を作り直す必要があるため、状態更新だけでなくリスト更新を呼ぶべきだが
-	-- ここでは既存ボタンの状態更新のみ行う。
-	-- 新規アンロック時は refreshList() が呼ばれる必要がある（後述のAttributeChangedで対応）
-
 	for boardId, entry in pairs(boardButtons) do
-		-- 表示されている＝所持済みのはず
 		if equippedId == boardId then
-			entry.button.Text = "解除する"
-			entry.button.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- 赤
+			entry.stroke.Color = Color3.fromRGB(50, 220, 100) -- Green
+			entry.stroke.Thickness = 4
+			entry.badge.Visible = true
 		else
-			entry.button.Text = "装備する"
-			entry.button.BackgroundColor3 = Color3.fromRGB(0, 180, 0)   -- 緑
+			entry.stroke.Color = Color3.fromRGB(220, 220, 235)
+			entry.stroke.Thickness = 3
+			entry.badge.Visible = false
 		end
-		entry.button.AutoButtonColor = true
-		entry.button.Active = true
-		entry.button.Transparency = 0
 	end
 end
 
@@ -266,24 +344,17 @@ player.AttributeChanged:Connect(function(attributeName)
 	) then
 		updateButtonState()
 	elseif EquipmentConstants and string.find(attributeName, EquipmentConstants.ATTR_UNLOCKED_PREFIX) then
-		-- アンロック状態が変わったらリストを再構築（未所持->所持で表示させるため）
-		-- refreshList() はローカル関数として定義されていないため、中身をここまたは関数化して呼ぶ必要がある
-		-- 現状のコード構造では refreshList がないため、リロードが必要。
-		-- 簡易リロード:
-		
-		-- リスト再描画ロジック（簡易版）
-		-- 既存削除
+		-- アンロック状態が変わったらリストを再構築
 		for _, child in ipairs(container:GetChildren()) do
 			if child:IsA("Frame") then child:Destroy() end
 		end
 		boardButtons = {}
 		
-		-- 再生成
 		for _, boardInfo in ipairs(EquipmentConstants.BOARD_LIST) do
 			local isUnlocked = player:GetAttribute(EquipmentConstants.ATTR_UNLOCKED_PREFIX .. boardInfo.id)
 			if isUnlocked then
-				local itemFrame, actionBtn = createItemEntry(boardInfo.id, boardInfo.displayName)
-				boardButtons[boardInfo.id] = { frame = itemFrame, button = actionBtn, info = boardInfo }
+				local itemFrame, actionBtn, stroke, badge = createItemEntry(boardInfo.id, boardInfo.displayName)
+				boardButtons[boardInfo.id] = { frame = itemFrame, button = actionBtn, stroke = stroke, badge = badge, info = boardInfo }
 				actionBtn.MouseButton1Click:Connect(function()
 					if RequestEquipEvent then RequestEquipEvent:FireServer(boardInfo.id) end
 				end)

@@ -1,151 +1,206 @@
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 local gui = script.Parent
 
--- UI構築
-local mainFrame = Instance.new("Frame")
+-- 共通ホバーアニメーション関数
+local function addHoverAnimation(guiObject, scaleTarget)
+	scaleTarget = scaleTarget or 1.05
+	local originalSize = guiObject.Size
+	
+	guiObject.MouseEnter:Connect(function()
+		TweenService:Create(guiObject, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Size = UDim2.new(originalSize.X.Scale, originalSize.X.Offset * scaleTarget, originalSize.Y.Scale, originalSize.Y.Offset * scaleTarget)
+		}):Play()
+	end)
+	
+	guiObject.MouseLeave:Connect(function()
+		TweenService:Create(guiObject, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = originalSize
+		}):Play()
+	end)
+end
+
+-- 既存のMainFrameがあれば削除（同じスクリプトの再実行時防止）
+if gui:FindFirstChild("MainFrame") then
+	gui.MainFrame:Destroy()
+end
+
+-- スタジオ内にコピー(ShopGuiの複製など)が残っている場合の強制排除
+for _, child in ipairs(player.PlayerGui:GetChildren()) do
+	if child:IsA("ScreenGui") and child ~= gui then
+		local duplicateMain = child:FindFirstChild("MainFrame")
+		if duplicateMain and duplicateMain:FindFirstChild("ProductContainer") then
+			child:Destroy()
+			print("[ShopClient] 別名のShop UI（または重複した古いUI）を検知したため強制削除しました:", child.Name)
+		end
+	end
+end
+
+-- UI構築 (Pop & Dynamic Design)
+local mainFrame = Instance.new("CanvasGroup")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 400, 0, 500)
+mainFrame.Size = UDim2.new(0, 540, 0, 420) -- ItemsUIと同じサイズ・グリッド構造に
 mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+mainFrame.BackgroundColor3 = Color3.fromRGB(245, 250, 255)
 mainFrame.BorderSizePixel = 0
 mainFrame.Visible = false
+mainFrame.GroupTransparency = 1 
 mainFrame.Parent = gui
 
-local uiCorner = Instance.new("UICorner")
-uiCorner.CornerRadius = UDim.new(0, 8)
-uiCorner.Parent = mainFrame
+local uiScale = Instance.new("UIScale", mainFrame)
+uiScale.Scale = 0
 
--- タイトルバー（閉じるボタン付き）
-local titleBar = Instance.new("Frame")
-titleBar.Size = UDim2.new(1, 0, 0, 40)
-titleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
-titleBar.BorderSizePixel = 0
-titleBar.Parent = mainFrame
-local titleCorner = Instance.new("UICorner")
-titleCorner.CornerRadius = UDim.new(0, 8)
-titleCorner.Parent = titleBar
+local mainCorner = Instance.new("UICorner", mainFrame)
+mainCorner.CornerRadius = UDim.new(0, 8)
 
--- 下部の角丸を隠すためのカバー
-local cover = Instance.new("Frame")
-cover.Size = UDim2.new(1, 0, 0, 10)
-cover.Position = UDim2.new(0, 0, 1, -10)
-cover.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
-cover.BorderSizePixel = 0
-cover.Parent = titleBar
+local mainStroke = Instance.new("UIStroke", mainFrame)
+mainStroke.Color = Color3.fromRGB(200, 220, 240)
+mainStroke.Thickness = 4
 
 local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(1, -50, 1, 0)
-titleLabel.Position = UDim2.new(0, 15, 0, 0)
+titleLabel.Name = "TitleLabel"
+titleLabel.Size = UDim2.new(1, -100, 0, 60)
+titleLabel.Position = UDim2.new(0, 25, 0, 5)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.Text = "ショップ"
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.TextSize = 20
+titleLabel.TextColor3 = Color3.fromRGB(60, 80, 100)
+titleLabel.Font = Enum.Font.GothamBlack
+titleLabel.TextSize = 26
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-titleLabel.Parent = titleBar
+titleLabel.Text = "Shop"
+titleLabel.Parent = mainFrame
 
 local closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
 closeButton.Size = UDim2.new(0, 40, 0, 40)
-closeButton.Position = UDim2.new(1, -40, 0, 0)
-closeButton.BackgroundTransparency = 1
-closeButton.Font = Enum.Font.GothamBold
+closeButton.Position = UDim2.new(1, -30, 0, 15)
+closeButton.AnchorPoint = Vector2.new(0.5, 0)
+closeButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Font = Enum.Font.GothamBlack
+closeButton.TextSize = 20
 closeButton.Text = "X"
-closeButton.TextColor3 = Color3.fromRGB(200, 200, 200)
-closeButton.TextSize = 18
-closeButton.Parent = titleBar
+closeButton.AutoButtonColor = false
+closeButton.Parent = mainFrame
+local closeCorner = Instance.new("UICorner", closeButton)
+closeCorner.CornerRadius = UDim.new(0, 6)
+addHoverAnimation(closeButton, 1.15)
 
-closeButton.MouseButton1Click:Connect(function()
-	mainFrame.Visible = false
-end)
+-- コンテナ作成
+local container = Instance.new("ScrollingFrame")
+container.Name = "ProductContainer"
+container.Size = UDim2.new(1, -30, 1, -80)
+container.Position = UDim2.new(0, 15, 0, 65)
+container.BackgroundTransparency = 1
+container.CanvasSize = UDim2.new(0, 0, 0, 0)
+container.AutomaticCanvasSize = Enum.AutomaticSize.Y
+container.ScrollBarThickness = 8
+container.ScrollBarImageColor3 = Color3.fromRGB(200, 200, 220)
+container.Parent = mainFrame
+
+local uiLayout = Instance.new("UIGridLayout")
+uiLayout.Parent = container
+uiLayout.SortOrder = Enum.SortOrder.LayoutOrder
+uiLayout.CellPadding = UDim2.new(0, 15, 0, 15)
+uiLayout.CellSize = UDim2.new(0, 110, 0, 145)
+uiLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
 -- 依存関係
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local EquipmentConstants = require(Shared:WaitForChild("EquipmentConstants"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RequestPurchaseEvent = Remotes:WaitForChild("Equipment"):WaitForChild(EquipmentConstants.REMOTE_PURCHASE_NAME)
 
--- コンテナ作成
-local container = Instance.new("ScrollingFrame")
-container.Name = "ProductContainer"
-container.Size = UDim2.new(1, -20, 1, -60)
-container.Position = UDim2.new(0, 10, 0, 50)
-container.BackgroundTransparency = 1
-container.CanvasSize = UDim2.new(0, 0, 0, 0)
-container.AutomaticCanvasSize = Enum.AutomaticSize.Y
-container.ScrollBarThickness = 6
-container.Parent = mainFrame
-
-local uiList = Instance.new("UIListLayout")
-uiList.Parent = container
-uiList.SortOrder = Enum.SortOrder.LayoutOrder
-uiList.Padding = UDim.new(0, 5)
-
--- 商品エントリ生成
+-- 商品エントリ生成 (Popスタイル)
 local function createProductEntry(boardInfo)
-	local frame = Instance.new("Frame")
-	frame.Name = boardInfo.id
-	frame.Size = UDim2.new(1, 0, 0, 60)
-	frame.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
-	frame.Parent = container
+	local containerFrame = Instance.new("Frame")
+	containerFrame.Name = boardInfo.id
+	containerFrame.BackgroundTransparency = 1
+	containerFrame.Parent = container
 
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 6)
-	corner.Parent = frame
+	local actionButton = Instance.new("TextButton")
+	actionButton.Name = "ActionButton"
+	actionButton.Size = UDim2.new(1, 0, 0, 110)
+	actionButton.BackgroundColor3 = Color3.fromRGB(245, 245, 255)
+	actionButton.Text = ""
+	actionButton.AutoButtonColor = false
+	actionButton.Parent = containerFrame
+
+	local corner = Instance.new("UICorner", actionButton)
+	corner.CornerRadius = UDim.new(0, 12)
+	
+	local stroke = Instance.new("UIStroke", actionButton)
+	stroke.Color = Color3.fromRGB(220, 220, 235)
+	stroke.Thickness = 3
+	
+	local emoji = Instance.new("TextLabel", actionButton)
+	emoji.Size = UDim2.new(1, 0, 1, 0)
+	emoji.Position = UDim2.new(0, 0, -0.1, 0)
+	emoji.BackgroundTransparency = 1
+	emoji.Text = "🛹"
+	emoji.TextSize = 50
+
+	local priceLabel = Instance.new("TextLabel", actionButton)
+	priceLabel.Size = UDim2.new(1, 0, 0, 20)
+	priceLabel.Position = UDim2.new(0, 0, 0.7, 0)
+	priceLabel.BackgroundTransparency = 1
+	priceLabel.TextColor3 = Color3.fromRGB(255, 150, 50)
+	priceLabel.Font = Enum.Font.GothamBlack
+	priceLabel.TextSize = 14
+	priceLabel.Text = (boardInfo.price or 0) .. " G"
 
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Size = UDim2.new(0, 150, 0, 30)
-	nameLabel.Position = UDim2.new(0, 10, 0, 5)
+	nameLabel.Name = "NameLabel"
+	nameLabel.Size = UDim2.new(1, 0, 0, 25)
+	nameLabel.Position = UDim2.new(0, 0, 0, 120)
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	nameLabel.TextColor3 = Color3.fromRGB(80, 80, 100)
 	nameLabel.Font = Enum.Font.GothamBold
-	nameLabel.TextSize = 16
-	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nameLabel.TextSize = 14
+	nameLabel.TextWrapped = true
+	nameLabel.TextScaled = true
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Center
 	nameLabel.Text = boardInfo.displayName
-	nameLabel.Parent = frame
+	nameLabel.Parent = containerFrame
 
-	local priceLabel = Instance.new("TextLabel")
-	priceLabel.Size = UDim2.new(0, 150, 0, 20)
-	priceLabel.Position = UDim2.new(0, 10, 0, 35)
-	priceLabel.BackgroundTransparency = 1
-	priceLabel.TextColor3 = Color3.fromRGB(200, 200, 100)
-	priceLabel.Font = Enum.Font.GothamMedium
-	priceLabel.TextSize = 14
-	priceLabel.TextXAlignment = Enum.TextXAlignment.Left
-	priceLabel.Text = "価格: " .. (boardInfo.price or 0) .. " G"
-	priceLabel.Parent = frame
-
-	local buyButton = Instance.new("TextButton")
-	buyButton.Size = UDim2.new(0, 100, 0, 40)
-	buyButton.Position = UDim2.new(1, -110, 0.5, 0)
-	buyButton.AnchorPoint = Vector2.new(0, 0.5)
-	buyButton.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-	buyButton.Font = Enum.Font.GothamBold
-	buyButton.TextSize = 14
-	buyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	buyButton.Text = "購入"
-	buyButton.Parent = frame
-	local btnCorner = Instance.new("UICorner")
-	btnCorner.CornerRadius = UDim.new(0, 4)
-	btnCorner.Parent = buyButton
+	local statusBadge = Instance.new("Frame")
+	statusBadge.Name = "StatusBadge"
+	statusBadge.Size = UDim2.new(1, 10, 0, 28)
+	statusBadge.AnchorPoint = Vector2.new(0.5, 1)
+	statusBadge.Position = UDim2.new(0.5, 0, 1, -10)
+	statusBadge.BackgroundColor3 = Color3.fromRGB(50, 220, 100)
+	statusBadge.Visible = false
+	statusBadge.Parent = actionButton
 	
-	return frame, buyButton
+	local badgeCorner = Instance.new("UICorner", statusBadge)
+	badgeCorner.CornerRadius = UDim.new(0, 8)
+	
+	local badgeText = Instance.new("TextLabel", statusBadge)
+	badgeText.Size = UDim2.new(1, 0, 1, 0)
+	badgeText.BackgroundTransparency = 1
+	badgeText.TextColor3 = Color3.fromRGB(255, 255, 255)
+	badgeText.Font = Enum.Font.GothamBlack
+	badgeText.TextSize = 14
+	badgeText.Text = "BOUGHT"
+
+	addHoverAnimation(actionButton, 1.05)
+
+	return containerFrame, actionButton, stroke, statusBadge
 end
 
-local productButtons = {} -- { [id] = { button, info } }
+local productButtons = {} -- { [id] = { button, stroke, badge, info } }
 
 -- 商品リスト構築
 if EquipmentConstants.BOARD_LIST then
 	for _, boardInfo in ipairs(EquipmentConstants.BOARD_LIST) do
 		-- 価格設定があるものだけ表示
 		if (boardInfo.price or 0) > 0 then
-			local frame, btn = createProductEntry(boardInfo)
-			productButtons[boardInfo.id] = { button = btn, info = boardInfo }
+			local frame, btn, stroke, badge = createProductEntry(boardInfo)
+			productButtons[boardInfo.id] = { button = btn, stroke = stroke, badge = badge, info = boardInfo }
 			
 			btn.MouseButton1Click:Connect(function()
 				local isUnlocked = player:GetAttribute(EquipmentConstants.ATTR_UNLOCKED_PREFIX .. boardInfo.id)
@@ -156,7 +211,6 @@ if EquipmentConstants.BOARD_LIST then
 					if currentMoney >= price then
 						RequestPurchaseEvent:FireServer(boardInfo.id)
 					else
-						-- 資金不足フィードバック（必要なら音など）
 						print("Not enough money")
 					end
 				end
@@ -174,21 +228,22 @@ local function updateShopState()
 		local price = entry.info.price or 0
 		
 		if isUnlocked then
-			entry.button.Text = "購入済み"
-			entry.button.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-			entry.button.Active = true -- 常にActiveにしておく
-			entry.button.AutoButtonColor = false
+			entry.stroke.Color = Color3.fromRGB(150, 150, 150)
+			entry.stroke.Thickness = 3
+			entry.badge.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+			entry.badge.Visible = true
+			entry.badge:FindFirstChildOfClass("TextLabel").Text = "BOUGHT"
 		else
 			if currentMoney >= price then
-				entry.button.Text = "購入"
-				entry.button.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-				entry.button.Active = true
-				entry.button.AutoButtonColor = true
+				entry.stroke.Color = Color3.fromRGB(50, 200, 255)
+				entry.stroke.Thickness = 3
+				entry.badge.Visible = false
 			else
-				entry.button.Text = "資金不足"
-				entry.button.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
-				entry.button.Active = true -- 資金不足でもボタン自体は有効（クリック検知させるため）
-				entry.button.AutoButtonColor = false
+				entry.stroke.Color = Color3.fromRGB(255, 100, 100)
+				entry.stroke.Thickness = 3
+				entry.badge.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+				entry.badge.Visible = true
+				entry.badge:FindFirstChildOfClass("TextLabel").Text = "NO MONEY"
 			end
 		end
 	end
@@ -204,14 +259,61 @@ end)
 -- 初期化
 updateShopState()
 
+-- UI開閉ロジック
+local isOpen = false
+
+local function toggleUI(forceState)
+	if forceState ~= nil then
+		isOpen = forceState
+	else
+		isOpen = not isOpen
+	end
+	
+	-- ★もし古いスクリプトが裏でFrame型のMainFrameを生成してしまっていたら、開く直前に破壊する
+	for _, child in ipairs(gui:GetChildren()) do
+		if child.Name == "MainFrame" and child:IsA("Frame") then
+			child:Destroy()
+			print("[ShopClient] 古いスクリプトによるUIを検知・排除しました")
+		end
+	end
+
+	if isOpen then
+		updateShopState()
+		mainFrame.Visible = true
+		mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+		uiScale.Scale = 0.8 -- 少し小さめから出現
+		
+		TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			GroupTransparency = 0
+		}):Play()
+		TweenService:Create(uiScale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Scale = 1
+		}):Play()
+	else
+		local closeTween = TweenService:Create(mainFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			GroupTransparency = 1
+		})
+		local scaleTween = TweenService:Create(uiScale, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Scale = 0.8
+		})
+		closeTween:Play()
+		scaleTween:Play()
+		closeTween.Completed:Connect(function()
+			if not isOpen then mainFrame.Visible = false end
+		end)
+	end
+end
+
+closeButton.MouseButton1Click:Connect(function()
+	toggleUI(false)
+end)
+
 -- ProximityPrompt検知
 ProximityPromptService.PromptTriggered:Connect(function(prompt, triggeredPlayer)
 	if triggeredPlayer ~= player then return end
 	
-	-- 名前で簡易チェック
 	if prompt.Name == "ShopPrompt" or 
 	   (prompt.Parent and prompt.Parent.Parent and prompt.Parent.Parent.Name == "ShopNPC") then
-		mainFrame.Visible = true
-		updateShopState() -- 開いたときにも更新
+		toggleUI(true)
 	end
 end)

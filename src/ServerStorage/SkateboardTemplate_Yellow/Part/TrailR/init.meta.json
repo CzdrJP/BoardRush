@@ -1,0 +1,23 @@
+{
+  "className": "Trail",
+  "properties": {
+    "Color": [{
+        "time": 0.0,
+        "color": [1.0, 0.8235, 0.1176]
+      }, {
+        "time": 1.0,
+        "color": [1.0, 0.8235, 0.1176]
+      }],
+    "Enabled": false,
+    "Lifetime": 0.5,
+    "Transparency": [{
+        "time": 0.0,
+        "value": 0.2,
+        "envelope": 0.0
+      }, {
+        "time": 1.0,
+        "value": 1.0,
+        "envelope": 0.0
+      }]
+  }
+}
