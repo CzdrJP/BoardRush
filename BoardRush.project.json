@@ -41,8 +41,8 @@
         "$path": "src/StarterPlayer/StarterPlayerScripts"
       },
       "$properties": {
-        "CharacterUseJumpPower": false,
-        "CameraMaxZoomDistance": 128
+        "CameraMaxZoomDistance": 128,
+        "CharacterUseJumpPower": false
       }
     },
     "Teams": {

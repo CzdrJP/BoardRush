@@ -20,7 +20,7 @@ local EquipmentConstants = require(Shared:WaitForChild("EquipmentConstants"))
 -- スコア定数
 ---------------------------------------------------------------------------
 local BOARD_MULTIPLIERS = {
-    equipped = 1,      -- スケボー装備時
+    equipped = 1,      -- スケボー装備時デフォルト上限
     unequipped = 0,    -- 未装備時
 }
 local BASE_SCORE = 100  -- 基本スコア
@@ -316,9 +316,19 @@ local function executeTrick(player: Player, trickDef)
     -- スコア計算
     local boardMul = BOARD_MULTIPLIERS.unequipped
     if player:GetAttribute(EquipmentConstants.ATTR_IS_EQUIPPED) then
-        boardMul = BOARD_MULTIPLIERS.equipped
+        local equippedId = player:GetAttribute(EquipmentConstants.ATTR_EQUIPPED_ID)
+        boardMul = BOARD_MULTIPLIERS.equipped -- デフォルト
+        
+        -- 装備中のボードから設定された倍率を取得
+        if EquipmentConstants.BOARD_LIST then
+            for _, boardInfo in ipairs(EquipmentConstants.BOARD_LIST) do
+                if boardInfo.id == equippedId then
+                    boardMul = boardInfo.scoreMultiplier or 1.0
+                    break
+                end
+            end
+        end
     end
-    
     local earned = math.floor(BASE_SCORE * (trickDef.scoreMultiplier or 1) * boardMul)
     if earned > 0 then
         local current = player:GetAttribute("TrickScore") or 0

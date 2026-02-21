@@ -13,7 +13,7 @@ return {
 	
 	-- ボードリスト（複数ボード対応）
 	BOARD_LIST = {
-		{ id = "Skateboard",  displayName = "Skateboard",  templateName = "SkateboardTemplate",  price = 0 },
-		{ id = "Skateboard2", displayName = "Skateboard2", templateName = "SkateboardTemplate2", price = 100 },
+		{ id = "Skateboard",  displayName = "Skateboard",  templateName = "SkateboardTemplate",  price = 0, scoreMultiplier = 1.0 },
+		{ id = "Skateboard2", displayName = "Skateboard2", templateName = "SkateboardTemplate2", price = 100, scoreMultiplier = 1.2 },
 	},
 }
