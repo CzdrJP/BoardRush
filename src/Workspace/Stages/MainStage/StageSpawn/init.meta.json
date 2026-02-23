@@ -1,0 +1,10 @@
+{
+  "className": "SpawnLocation",
+  "properties": {
+    "Anchored": true,
+    "CFrame": [0, 1005, 2000, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+    "CanCollide": false,
+    "Size": [10, 1, 10],
+    "Transparency": 1
+  }
+}

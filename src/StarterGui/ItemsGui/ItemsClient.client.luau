@@ -91,13 +91,13 @@ end
 -- 「アイテム」ボタン（画面右下）
 local openButton = Instance.new("TextButton")
 openButton.Name = "OpenButton"
-openButton.Size = UDim2.new(0, 140, 0, 50)
-openButton.Position = UDim2.new(1, -160, 0.9, -30)
+openButton.Size = UDim2.new(0, 160, 0, 60)
+openButton.Position = UDim2.new(1, -100, 1, -50)
 openButton.AnchorPoint = Vector2.new(0.5, 0.5)
 openButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 openButton.TextColor3 = Color3.fromRGB(50, 150, 255)
 openButton.Font = Enum.Font.GothamBlack
-openButton.TextSize = 20
+openButton.TextSize = 24
 openButton.Text = "👜 ITEMS"
 openButton.AutoButtonColor = false
 openButton.Parent = ScreenGui

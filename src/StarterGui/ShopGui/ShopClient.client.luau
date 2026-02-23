@@ -29,16 +29,16 @@ if gui:FindFirstChild("MainFrame") then
 	gui.MainFrame:Destroy()
 end
 
--- スタジオ内にコピー(ShopGuiの複製など)が残っている場合の強制排除
-for _, child in ipairs(player.PlayerGui:GetChildren()) do
-	if child:IsA("ScreenGui") and child ~= gui then
-		local duplicateMain = child:FindFirstChild("MainFrame")
-		if duplicateMain and duplicateMain:FindFirstChild("ProductContainer") then
-			child:Destroy()
-			print("[ShopClient] 別名のShop UI（または重複した古いUI）を検知したため強制削除しました:", child.Name)
-		end
-	end
-end
+-- スタジオ内にコピー(ShopGuiの複製など)が残っている場合の強制排除 (一旦無効化)
+-- for _, child in ipairs(player.PlayerGui:GetChildren()) do
+-- 	if child:IsA("ScreenGui") and child ~= gui then
+-- 		local duplicateMain = child:FindFirstChild("MainFrame")
+-- 		if duplicateMain and duplicateMain:FindFirstChild("ProductContainer") then
+-- 			child:Destroy()
+-- 			print("[ShopClient] 別名のShop UI（または重複した古いUI）を検知したため強制削除しました:", child.Name)
+-- 		end
+-- 	end
+-- end
 
 -- UI構築 (Pop & Dynamic Design)
 local mainFrame = Instance.new("CanvasGroup")
@@ -109,11 +109,37 @@ uiLayout.CellPadding = UDim2.new(0, 15, 0, 15)
 uiLayout.CellSize = UDim2.new(0, 110, 0, 145)
 uiLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
--- 依存関係
-local Shared = ReplicatedStorage:WaitForChild("Shared")
-local EquipmentConstants = require(Shared:WaitForChild("EquipmentConstants"))
-local Remotes = ReplicatedStorage:WaitForChild("Remotes")
-local RequestPurchaseEvent = Remotes:WaitForChild("Equipment"):WaitForChild(EquipmentConstants.REMOTE_PURCHASE_NAME)
+-- 依存関係の保護 (ItemsClientと同じ安全な取得方式)
+local function safeWaitFor(parent, name, timeout)
+	local obj = parent:WaitForChild(name, timeout)
+	if not obj then
+		warn(string.format("[ShopClient] %.1f秒以内に %s が %s 内に見つかりませんでした。", timeout, name, parent.Name))
+	end
+	return obj
+end
+
+local Shared = safeWaitFor(ReplicatedStorage, "Shared", 5)
+local Remotes = safeWaitFor(ReplicatedStorage, "Remotes", 5)
+
+local EquipmentConstants = nil
+if Shared then
+	local module = safeWaitFor(Shared, "EquipmentConstants", 5)
+	if module then
+		EquipmentConstants = require(module)
+	end
+end
+
+local RequestPurchaseEvent = nil
+if Remotes and EquipmentConstants then
+	local equipmentRemotes = safeWaitFor(Remotes, "Equipment", 5)
+	if equipmentRemotes then
+		RequestPurchaseEvent = safeWaitFor(equipmentRemotes, EquipmentConstants.REMOTE_PURCHASE_NAME, 5)
+	end
+end
+
+if not RequestPurchaseEvent then
+	warn("[ShopClient] 致命的エラー: RequestPurchaseSkateboard イベントが取得できませんでした。購入処理は機能しません。")
+end
 
 -- 商品エントリ生成 (Popスタイル)
 local function createProductEntry(boardInfo)
@@ -143,6 +169,7 @@ local function createProductEntry(boardInfo)
 	emoji.BackgroundTransparency = 1
 	emoji.Text = "🛹"
 	emoji.TextSize = 50
+	emoji.Active = false -- ★クリック吸収防止
 
 	local priceLabel = Instance.new("TextLabel", actionButton)
 	priceLabel.Size = UDim2.new(1, 0, 0, 20)
@@ -152,6 +179,7 @@ local function createProductEntry(boardInfo)
 	priceLabel.Font = Enum.Font.GothamBlack
 	priceLabel.TextSize = 14
 	priceLabel.Text = (boardInfo.price or 0) .. " G"
+	priceLabel.Active = false -- ★クリック吸収防止
 
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Name = "NameLabel"
@@ -165,6 +193,7 @@ local function createProductEntry(boardInfo)
 	nameLabel.TextScaled = true
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Center
 	nameLabel.Text = boardInfo.displayName
+	nameLabel.Active = false -- ★クリック吸収防止
 	nameLabel.Parent = containerFrame
 
 	local statusBadge = Instance.new("Frame")
@@ -174,6 +203,7 @@ local function createProductEntry(boardInfo)
 	statusBadge.Position = UDim2.new(0.5, 0, 1, -10)
 	statusBadge.BackgroundColor3 = Color3.fromRGB(50, 220, 100)
 	statusBadge.Visible = false
+	statusBadge.Active = false -- ★クリック吸収防止
 	statusBadge.Parent = actionButton
 	
 	local badgeCorner = Instance.new("UICorner", statusBadge)
@@ -186,6 +216,7 @@ local function createProductEntry(boardInfo)
 	badgeText.Font = Enum.Font.GothamBlack
 	badgeText.TextSize = 14
 	badgeText.Text = "BOUGHT"
+	badgeText.Active = false -- ★クリック吸収防止
 
 	addHoverAnimation(actionButton, 1.05)
 
@@ -202,17 +233,32 @@ if EquipmentConstants.BOARD_LIST then
 			local frame, btn, stroke, badge = createProductEntry(boardInfo)
 			productButtons[boardInfo.id] = { button = btn, stroke = stroke, badge = badge, info = boardInfo }
 			
+			local isProcessingPurchase = false
+			
 			btn.MouseButton1Click:Connect(function()
+				if isProcessingPurchase then return end
+				
 				local isUnlocked = player:GetAttribute(EquipmentConstants.ATTR_UNLOCKED_PREFIX .. boardInfo.id)
 				if not isUnlocked then
 					-- クリック時に所持金チェックを行う
 					local currentMoney = player:GetAttribute("TrickScore") or 0
 					local price = boardInfo.price or 0
+					
+					print(string.format("[ShopClient] Attempting to buy %s | Money: %d / Price: %d", boardInfo.id, currentMoney, price))
+					
 					if currentMoney >= price then
+						isProcessingPurchase = true
 						RequestPurchaseEvent:FireServer(boardInfo.id)
+						
+						-- 数秒後にデバウンス解除（サーバーから応答がない場合のフェイルセーフ）
+						task.delay(1.5, function()
+							isProcessingPurchase = false
+						end)
 					else
-						print("Not enough money")
+						print("[ShopClient] Not enough money. Required:", price, "Current:", currentMoney)
 					end
+				else
+					print("[ShopClient] Already unlocked:", boardInfo.id)
 				end
 			end)
 		end
@@ -317,3 +363,5 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt, triggeredPlayer)
 		toggleUI(true)
 	end
 end)
+
+print("[ShopClient] Initialized RequestPurchaseEvent path:", RequestPurchaseEvent and RequestPurchaseEvent.GetFullName and RequestPurchaseEvent:GetFullName() or "NIL")

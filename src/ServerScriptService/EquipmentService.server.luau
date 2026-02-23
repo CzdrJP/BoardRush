@@ -289,7 +289,12 @@ end)
 
 -- Purchase Request
 RequestPurchaseSkateboard.OnServerEvent:Connect(function(player, boardId)
-	if not boardId then return end
+	print(string.format("[EquipmentService] Purchase request received from %s for %s", player.Name, tostring(boardId)))
+	
+	if not boardId then 
+		warn("[EquipmentService] Purchase failed: boardId is nil")
+		return 
+	end
 	
 	-- ボード定義検索
 	local targetBoard = nil
@@ -357,6 +362,13 @@ end
 -- プレイヤー離脱時クリーンアップ
 Players.PlayerRemoving:Connect(function(player)
 	savedPoseState[player] = nil
+end)
+
+print("[EquipmentService] Successfully bound RequestPurchaseSkateboard! Name:", RequestPurchaseSkateboard.Name)
+
+-- 究極のデバッグ用リスナー（メイン処理の前に捕捉できるか確認）
+RequestPurchaseSkateboard.OnServerEvent:Connect(function(plr, arg)
+	print("[EquipmentService-DIAGNOSTIC] Raw purchase event triggered by:", plr.Name, "Arg:", tostring(arg))
 end)
 
 print("[EquipmentService] Initialized (ServerStorage Source + Riding Pose)")

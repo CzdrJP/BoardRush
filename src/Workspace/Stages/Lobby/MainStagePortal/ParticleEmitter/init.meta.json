@@ -1,0 +1,24 @@
+{
+  "className": "ParticleEmitter",
+  "properties": {
+    "Color": [{
+        "time": 0.0,
+        "color": [0.7843, 0.3922, 1.0]
+      }, {
+        "time": 1.0,
+        "color": [0.3922, 0.0, 1.0]
+      }],
+    "Rate": 50,
+    "Size": [{
+        "time": 0.0,
+        "value": 0.5,
+        "envelope": 0.0
+      }, {
+        "time": 1.0,
+        "value": 0.0,
+        "envelope": 0.0
+      }],
+    "Speed": [5, 10],
+    "SpreadAngle": [180, 180]
+  }
+}

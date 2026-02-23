@@ -34,10 +34,9 @@ screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder = 10
 screenGui.Parent = playerGui
 
--- メインスコア表示（右上）
 local scoreFrame = Instance.new("Frame")
 scoreFrame.Name = "ScoreFrame"
-scoreFrame.Size = UDim2.new(0, 220, 0, 70)
+scoreFrame.Size = UDim2.new(0, 220, 0, 70) -- 元のサイズに戻す
 scoreFrame.Position = UDim2.new(1, -20, 0, 20)
 scoreFrame.AnchorPoint = Vector2.new(1, 0)
 scoreFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
@@ -81,13 +80,35 @@ scoreLabel.Font = Enum.Font.GothamBlack
 scoreLabel.TextXAlignment = Enum.TextXAlignment.Right
 scoreLabel.Parent = scoreFrame
 
+-- 1回のジャンプで獲得したスコア（フローティングテキスト）
+local jumpScoreLabel = Instance.new("TextLabel")
+jumpScoreLabel.Name = "JumpScoreLabel"
+jumpScoreLabel.Size = UDim2.new(0, 220, 0, 24) -- ScoreFrameと同じ幅
+jumpScoreLabel.Position = UDim2.new(1, -20, 0, 100) -- ScoreFrameのすぐ下
+jumpScoreLabel.AnchorPoint = Vector2.new(1, 0)
+jumpScoreLabel.BackgroundTransparency = 1
+jumpScoreLabel.Text = ""
+jumpScoreLabel.TextColor3 = Color3.fromRGB(150, 255, 100)
+jumpScoreLabel.TextSize = 28 -- 20から28へ拡大
+jumpScoreLabel.Font = Enum.Font.GothamBold
+jumpScoreLabel.TextXAlignment = Enum.TextXAlignment.Right
+jumpScoreLabel.TextTransparency = 1
+jumpScoreLabel.Parent = screenGui -- ScoreFrameの外（下）に出す
+
+---------------------------------------------------------------------------
+-- ジャンプスコア状態
+---------------------------------------------------------------------------
+local currentJumpScore = 0
+local resetJumpScoreTask = nil
+
 ---------------------------------------------------------------------------
 -- スコア更新
 ---------------------------------------------------------------------------
 local isDrainAnimating = false -- 前方宣言（ゲームオーバー演出で使用）
+local isAddAnimating = false   -- 加算時の演出用
 
 local function updateScore()
-    if isDrainAnimating then return end -- アニメ中は更新しない
+    if isDrainAnimating or isAddAnimating then return end -- アニメ中は更新しない
     local score = player:GetAttribute("TrickScore") or 0
     scoreLabel.Text = tostring(score)
 end
@@ -196,6 +217,67 @@ local function showEarnedScore(amount: number)
 end
 
 ---------------------------------------------------------------------------
+-- スコア加算演出（ガチャガチャ増える）
+---------------------------------------------------------------------------
+local function playMoneyAddAnimation(earned: number)
+    if earned <= 0 then return end
+    isAddAnimating = true
+    
+    local targetScore = player:GetAttribute("TrickScore") or 0
+    local startScore = math.max(0, targetScore - earned)
+    
+    -- UIを少し大きくする演出
+    TweenService:Create(scoreFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, 260, 0, 82)
+    }):Play()
+    
+    -- スコアラベルを黄色（ゴールド）っぽくする
+    TweenService:Create(scoreLabel, TweenInfo.new(0.2), {
+        TextColor3 = Color3.fromRGB(255, 255, 100)
+    }):Play()
+    
+    -- パラパラ増加アニメーション
+    local totalDuration = 1.0
+    local steps = 20
+    local stepInterval = totalDuration / steps
+    
+    task.spawn(function()
+        for i = 1, steps do
+            local progress = i / steps
+            local baseValue = math.floor(startScore + earned * progress)
+            
+            -- ガチャガチャ感を出すためのランダムブレ
+            local jitter = math.random(0, math.max(1, math.floor(earned * 0.2)))
+            local displayed = baseValue + jitter
+            
+            -- 最後は合わせる
+            if i >= steps - 2 then
+                displayed = targetScore
+            end
+            
+            scoreLabel.Text = tostring(displayed)
+            task.wait(stepInterval)
+        end
+        
+        -- 最終値をターゲットに確定
+        scoreLabel.Text = tostring(targetScore)
+        
+        -- UIを元のサイズに戻す
+        TweenService:Create(scoreFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 220, 0, 70)
+        }):Play()
+        
+        -- テキスト色を戻す
+        TweenService:Create(scoreLabel, TweenInfo.new(0.5), {
+            TextColor3 = Color3.fromRGB(255, 255, 255)
+        }):Play()
+        
+        isAddAnimating = false
+        updateScore() -- 念のため同期
+    end)
+end
+
+---------------------------------------------------------------------------
 -- ゲームオーバー時マネー減少演出
 ---------------------------------------------------------------------------
 local function playMoneyDrainAnimation(fromScore: number)
@@ -265,12 +347,58 @@ end
 -- TrickEndedハンドラ
 TrickEnded.OnClientEvent:Connect(function(data)
     if data and data.earnedScore and data.earnedScore > 0 then
-        showEarnedScore(data.earnedScore)
+        -- 1ジャンプの合計スコア更新とアニメーション（ここは空中のトリック完了時）
+        if resetJumpScoreTask then
+            task.cancel(resetJumpScoreTask)
+            resetJumpScoreTask = nil
+        end
+        currentJumpScore += data.earnedScore
+        jumpScoreLabel.Text = "+ " .. tostring(currentJumpScore)
+        jumpScoreLabel.TextTransparency = 0
+        jumpScoreLabel.Position = UDim2.new(1, -20, 0, 100)
+        
+        -- ポップアニメーション
+        jumpScoreLabel.TextSize = 34
+        TweenService:Create(jumpScoreLabel, TweenInfo.new(0.3, Enum.EasingStyle.Bounce, Enum.EasingDirection.Out), {
+            TextSize = 28
+        }):Play()
+    end
+    
+    -- ジャンプサイクル完了（着地時）の処理
+    if data and data.cycleCompleted then
+        if data.totalEarned and data.totalEarned > 0 then
+            -- 着地時に頭上ポップアップとコイン散らばり演出を実行
+            showEarnedScore(data.totalEarned)
+            
+            -- フローティングUIを scoreLabel(右上) へ吸い込まれるように移動・フェードアウト
+            TweenService:Create(jumpScoreLabel, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+                Position = UDim2.new(1, -20, 0, 60), -- scoreFrame付近へ
+                TextTransparency = 1
+            }):Play()
+            
+            -- 吸い込まれた直後にガチャガチャ演出開始
+            task.delay(0.4, function()
+                currentJumpScore = 0
+                jumpScoreLabel.Text = ""
+                jumpScoreLabel.Position = UDim2.new(1, -20, 0, 100)
+                playMoneyAddAnimation(data.totalEarned)
+            end)
+        else
+            -- フローティングUIを即座に消去
+            currentJumpScore = 0
+            jumpScoreLabel.Text = ""
+            jumpScoreLabel.TextTransparency = 1
+            jumpScoreLabel.Position = UDim2.new(1, -20, 0, 100)
+        end
     end
     
     -- ゲームオーバー時マネー減少演出
     if data and data.gameOver and data.lostScore and data.lostScore > 0 then
         playMoneyDrainAnimation(data.lostScore)
+        -- フローティングUIもリセット
+        currentJumpScore = 0
+        jumpScoreLabel.Text = ""
+        jumpScoreLabel.TextTransparency = 1
     end
 end)
 

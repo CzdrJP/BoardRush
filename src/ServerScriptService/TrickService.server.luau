@@ -85,7 +85,7 @@ end
 ---------------------------------------------------------------------------
 local function getState(player: Player)
     if not playerState[player] then
-        playerState[player] = { Airborne = false, TrickActive = false, LastRequestTime = 0, PrevPlatformStand = nil }
+        playerState[player] = { Airborne = false, TrickActive = false, LastRequestTime = 0, PrevPlatformStand = nil, TempJumpScore = 0 }
     end
     return playerState[player]
 end
@@ -154,6 +154,7 @@ local function cleanupTrick(player: Player, character: Model?, humanoid: Humanoi
 
     -- 状態リセット
     state.TrickActive = false
+    state.LastTrickEndTime = tick()
 end
 
 ---------------------------------------------------------------------------
@@ -166,6 +167,9 @@ local function triggerGameOver(player: Player, character: Model, humanoid: Human
     -- Airborne も解除
     local state = getState(player)
     state.Airborne = false
+    
+    -- 当該ジャンプの仮スコアもリセット
+    state.TempJumpScore = 0
 
     -- スコアリセット（スケボー装備時のみ）
     local oldScore = player:GetAttribute("TrickScore") or 0
@@ -331,11 +335,10 @@ local function executeTrick(player: Player, trickDef)
     end
     local earned = math.floor(BASE_SCORE * (trickDef.scoreMultiplier or 1) * boardMul)
     if earned > 0 then
-        local current = player:GetAttribute("TrickScore") or 0
-        player:SetAttribute("TrickScore", current + earned)
+        state.TempJumpScore = (state.TempJumpScore or 0) + earned
     end
 
-    -- TrickEnded通知（獲得スコア付き）
+    -- TrickEnded通知（獲得スコア付き、ただし確定前）
     TrickEnded:FireClient(player, { earnedScore = earned })
 end
 
@@ -355,13 +358,13 @@ RequestTrick.OnServerEvent:Connect(function(player: Player)
 
     -- サーバー側 Airborne 確認（クライアント申告は信用しない）
     if not state.Airborne then
-        -- print("[TrickService] Rejected: Not Airborne", player.Name, "State:", state.Airborne)
+        warn("[TrickService] Rejected: Not Airborne", player.Name, "State:", state.Airborne)
         return
     end
 
     -- トリック中は再発動不可
     if state.TrickActive then
-        -- print("[TrickService] Rejected: TrickActive is true", player.Name)
+        warn("[TrickService] Rejected: TrickActive is true", player.Name)
         return
     end
 
@@ -389,13 +392,20 @@ local function onCharacterAdded(player: Player, character: Model)
         local s = getState(player)
 
         if newState == Enum.HumanoidStateType.Freefall then
-             -- print("[TrickService] State Changed: Freefall", player.Name)
+             print("[TrickService] State Changed: Freefall", player.Name)
             -- Freefallに入った（LaunchPad以外のケースもキャッチ）
         elseif newState == Enum.HumanoidStateType.Landed
             or newState == Enum.HumanoidStateType.Running then
             -- 接地
-            -- print("[TrickService] State Changed: Landed/Running", player.Name, newState, "Floor:", humanoid.FloorMaterial)
+            print("[TrickService] State Changed: Landed/Running", player.Name, newState, "Floor:", humanoid.FloorMaterial)
             
+            -- トリックが終了してPhysicsから本来のStateに戻る際、
+            -- 一瞬だけ誤ってRunning等に入ってしまうのを防ぐため猶予時間（0.25秒）を設ける
+            if s.Airborne and s.LastTrickEndTime and (tick() - s.LastTrickEndTime < 0.25) then
+                print("[TrickService] Ignored Landed/Running due to recent Trick completion", player.Name)
+                return
+            end
+
             if s.TrickActive then
                 -- TrickActive中に接地 → 即死（最優先）
                 local root = character:FindFirstChild("HumanoidRootPart")
@@ -404,7 +414,18 @@ local function onCharacterAdded(player: Player, character: Model)
                 end
             else
                 if s.Airborne then
-                     -- print("[TrickService] Landed - Airborne reset (was true)", player.Name)
+                     print("[TrickService] Landed - Airborne reset (was true)", player.Name)
+                     -- 無事に着地成功：溜まっていたスコアを確定させる
+                     if s.TempJumpScore and s.TempJumpScore > 0 then
+                         local current = player:GetAttribute("TrickScore") or 0
+                         player:SetAttribute("TrickScore", current + s.TempJumpScore)
+                         -- クライアントへサイクル完了（着地成功）を通知して演出・UIリセットを発火
+                         TrickEnded:FireClient(player, { cycleCompleted = true, totalEarned = s.TempJumpScore })
+                         s.TempJumpScore = 0
+                     else
+                         -- スコアがなくても着地したのでUIリセットだけさせる
+                         TrickEnded:FireClient(player, { cycleCompleted = true, totalEarned = 0 })
+                     end
                 end
                 s.Airborne = false
                 -- 着地時: NetworkOwnerをプレイヤーに復帰（フリーズ回避）
